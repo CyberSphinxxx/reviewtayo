@@ -542,3 +542,21 @@ export function getExamMockSpecsForLevel(
     passingScorePercentage: exam.mockSpecs.passingScorePercentage,
   };
 }
+
+/**
+ * Runner route for a specific exam level and mode (guide §16: centralized
+ * route generation — no component constructs exam runner URLs by hand).
+ * Derives from the exam's catalog runner URLs. Modes without a dedicated
+ * runner route (topic practice, mistake/bookmark drills) return the exam's
+ * practice hub instead of a fabricated /exams/[level]/[mode] 404.
+ */
+export function getExamRunnerRouteForMode(
+  examId: string,
+  levelId: string | undefined,
+  mode: string
+): string | undefined {
+  const routes = getExamRoutesForLevel(examId, levelId);
+  if (mode === "quick") return routes.quickDrillUrl;
+  if (mode === "full") return routes.fullMockUrl;
+  return routes.practiceUrl;
+}
