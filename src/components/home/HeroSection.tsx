@@ -3,12 +3,26 @@ import Link from "next/link";
 import { ReviewTayoOwl } from "@/components/brand/ReviewTayoOwl";
 import { useSession } from "@/lib/auth/auth-client";
 import { AuthModal } from "@/components/auth/AuthModal";
+import { OnboardingService } from "@/lib/onboarding/onboarding-service";
+import { getPostAuthDestinationFromState } from "@/lib/onboarding/destination";
 
 export function HeroSection() {
   const sectionRef = useRef<HTMLElement>(null);
   const cardsRef = useRef<HTMLDivElement>(null);
   const { data: session, refetch } = useSession();
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  // Users with a real study history OR a saved onboarding session get
+  // "Continue studying"; brand-new visitors get the guided "Get started"
+  // entry. Computed after mount from local state so SSR markup stays stable.
+  // (A completed/abandoned onboarding alone also means there is something to
+  // resume — the dashboard shows the study plan it produced.)
+  const [established, setEstablished] = useState(false);
+  useEffect(() => {
+    setEstablished(
+      OnboardingService.isEstablishedUser() ||
+        OnboardingService.getStatus() !== "not_started"
+    );
+  }, [session]);
 
   useEffect(() => {
     const section = sectionRef.current;
@@ -77,27 +91,60 @@ export function HeroSection() {
       {/* Calls to Action */}
       <div className="flex gap-3 flex-wrap justify-center relative z-10">
         {session?.user ? (
+          established ? (
+            <>
+              <Link
+                href="/dashboard"
+                className="inline-flex items-center justify-center gap-2 px-6 py-[15px] rounded-[14px] font-bold text-[16px] text-white bg-[#8a1630] shadow-[0_10px_24px_-10px_rgba(138,22,48,0.75)] hover:-translate-y-0.5 hover:shadow-[0_16px_28px_-10px_rgba(138,22,48,0.8)] transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f6b93b]"
+              >
+                Continue studying &rarr;
+              </Link>
+              <Link
+                href="/reviewers"
+                className="inline-flex items-center justify-center gap-2 px-6 py-[15px] rounded-[14px] font-bold text-[16px] text-[#1b1216] dark:text-[#f8ecee] bg-white dark:bg-[#2b1620] shadow-[inset_0_0_0_1.5px_rgba(27,18,22,0.24)] dark:shadow-[inset_0_0_0_1.5px_rgba(255,255,255,0.2)] hover:bg-[rgba(27,18,22,0.06)] dark:hover:bg-[#3b1a25] transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f6b93b]"
+              >
+                Browse exams
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link
+                href="/onboarding"
+                className="inline-flex items-center justify-center gap-2 px-6 py-[15px] rounded-[14px] font-bold text-[16px] text-white bg-[#8a1630] shadow-[0_10px_24px_-10px_rgba(138,22,48,0.75)] hover:-translate-y-0.5 hover:shadow-[0_16px_28px_-10px_rgba(138,22,48,0.8)] transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f6b93b]"
+              >
+                Get started
+              </Link>
+              <Link
+                href="/dashboard"
+                className="inline-flex items-center justify-center gap-2 px-6 py-[15px] rounded-[14px] font-bold text-[16px] text-[#1b1216] dark:text-[#f8ecee] bg-white dark:bg-[#2b1620] shadow-[inset_0_0_0_1.5px_rgba(27,18,22,0.24)] dark:shadow-[inset_0_0_0_1.5px_rgba(255,255,255,0.2)] hover:bg-[rgba(27,18,22,0.06)] dark:hover:bg-[#3b1a25] transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f6b93b]"
+              >
+                My dashboard
+              </Link>
+            </>
+          )
+        ) : established ? (
           <>
+            {/* Returning guest (same device): resume where they left off. */}
             <Link
               href="/dashboard"
               className="inline-flex items-center justify-center gap-2 px-6 py-[15px] rounded-[14px] font-bold text-[16px] text-white bg-[#8a1630] shadow-[0_10px_24px_-10px_rgba(138,22,48,0.75)] hover:-translate-y-0.5 hover:shadow-[0_16px_28px_-10px_rgba(138,22,48,0.8)] transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f6b93b]"
             >
-              Go to my dashboard &rarr;
+              Continue studying &rarr;
             </Link>
             <Link
-              href="/reviewers"
+              href="/onboarding?edit=1"
               className="inline-flex items-center justify-center gap-2 px-6 py-[15px] rounded-[14px] font-bold text-[16px] text-[#1b1216] dark:text-[#f8ecee] bg-white dark:bg-[#2b1620] shadow-[inset_0_0_0_1.5px_rgba(27,18,22,0.24)] dark:shadow-[inset_0_0_0_1.5px_rgba(255,255,255,0.2)] hover:bg-[rgba(27,18,22,0.06)] dark:hover:bg-[#3b1a25] transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f6b93b]"
             >
-              Browse exams
+              Update my study plan
             </Link>
           </>
         ) : (
           <>
             <Link
-              href="/reviewers"
+              href="/onboarding"
               className="inline-flex items-center justify-center gap-2 px-6 py-[15px] rounded-[14px] font-bold text-[16px] text-white bg-[#8a1630] shadow-[0_10px_24px_-10px_rgba(138,22,48,0.75)] hover:-translate-y-0.5 hover:shadow-[0_16px_28px_-10px_rgba(138,22,48,0.8)] transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f6b93b]"
             >
-              Choose an exam
+              Get started
             </Link>
             <button
               type="button"
@@ -115,6 +162,11 @@ export function HeroSection() {
         onClose={() => setAuthModalOpen(false)}
         onSuccess={() => {
           refetch();
+          // Automatic first-login rule: a brand-new account goes through
+          // onboarding (resuming a saved step); everyone else stays put.
+          const dest = getPostAuthDestinationFromState();
+          if (dest !== "/onboarding") return;
+          window.location.assign(dest);
         }}
       />
 
