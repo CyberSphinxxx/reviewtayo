@@ -120,7 +120,7 @@ export default function BookmarksPage() {
                 While reviewing any exam or quiz result, click the bookmark icon on any question to save it here for future drills.
               </p>
               <Link
-                href="/exams/professional/quick"
+                href="/practice"
                 className="inline-block mt-4 px-4 py-2 rounded-xl bg-brand-700 text-white font-bold text-xs shadow hover:bg-brand-800 transition"
               >
                 Take a Quick Test
