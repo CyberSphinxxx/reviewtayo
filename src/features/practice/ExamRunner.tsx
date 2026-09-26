@@ -47,6 +47,7 @@ import { TestModeBar } from "./TestModeBar";
 import { getExamTheme } from "@/features/practice/examTheme";
 import { getCoachQuip, nextStreak } from "@/features/practice/coach";
 import { CoachPanel } from "@/components/practice/CoachPanel";
+import { resolveExamLevelIdForAttempt } from "@/lib/exam-context";
 
 /**
  * Question Map page size. Large banks (300-500 items) are paginated instead of
@@ -59,6 +60,14 @@ interface ExamRunnerProps {
   rules: ExamRuleConfig;
   title: string;
   subtitle?: string;
+  /**
+   * Explicit exam identity (Phase 0): callers that know the track/level
+   * (e.g. /exams/[level]/* runner routes) must pass it here. When omitted,
+   * identity is derived from the questions' subject ids — never from the
+   * display title.
+   */
+  examLevelId?: string;
+  trackId?: string;
   onComplete?: (attemptId: string) => void;
 }
 
@@ -66,9 +75,23 @@ export function ExamRunner({
   initialQuestions,
   rules,
   title,
+  subtitle,
+  examLevelId,
+  trackId,
 }: ExamRunnerProps) {
   const router = useRouter();
-  const levelSlug = title.toLowerCase().includes("subprof") ? "subprofessional" : "professional";
+  // Explicit identity only (guide §5/§6): the supplied trackId/level wins,
+  // otherwise the questions' subject ids resolve their own exam level.
+  // Bookmarks/mistake drills (mixed-topic pools) may resolve per-session.
+  const resolvedTrackId =
+    trackId ?? resolveExamLevelIdForAttempt(initialQuestions.map((q) => q.subjectId), examLevelId);
+  const levelSlug = resolvedTrackId ?? "general";
+  const trackNameLabel =
+    resolvedTrackId === "subprofessional"
+      ? "Subprofessional"
+      : resolvedTrackId === "professional"
+      ? "Professional"
+      : undefined;
   const topicId =
     initialQuestions[0]?.topicId && rules.mode === "practice"
       ? initialQuestions[0].topicId
@@ -348,6 +371,7 @@ export function ExamRunner({
     const attemptData: StoredAttemptDetails = {
       id: attemptId,
       title,
+      examLevelId: examLevelId ?? resolvedTrackId,
       mode: rules.mode,
       rules,
       questions: initialQuestions,
@@ -364,7 +388,7 @@ export function ExamRunner({
     }
 
     router.push(`/results/${attemptId}`);
-  }, [initialQuestions, levelSlug, rules, title, topicId, router]);
+  }, [initialQuestions, levelSlug, rules, title, topicId, examLevelId, resolvedTrackId, router]);
 
   // Continuous Single Timer step
   useEffect(() => {
@@ -722,8 +746,8 @@ export function ExamRunner({
     >
       {/* Top Focused Minimal Test Mode Header */}
       <TestModeBar
-        examName={title || "Civil Service Exam (CSE)"}
-        levelName={levelSlug === "subprofessional" ? "Subprofessional" : "Professional"}
+        examName={title}
+        levelName={trackNameLabel}
         currentIndex={session.currentIndex}
         totalQuestions={session.totalQuestions}
         remainingSeconds={session.timer.remainingSeconds}
@@ -824,7 +848,13 @@ export function ExamRunner({
                 }`}
               >
                 <div ref={confettiAnchorRef} className="conf-anchor" aria-hidden="true" />
-                {/* Question Subtest & Utility Bar */}
+                {/* Session subtitle (e.g. the honest "N of TARGET items" notice
+                    for shortened full mocks) shown once above the first item. */}
+                {session.currentIndex === 0 && subtitle && (
+                  <p className="text-[13px] leading-relaxed text-[#5a4a50] dark:text-[#d6bcc3] mb-3">
+                    {subtitle}
+                  </p>
+                )}
                 {/* Question Subtest & Utility Bar — rows stack so narrow
                     columns never force the tools to wrap into a mess */}
                 <div className="pb-4 border-b border-slate-100 space-y-2.5">
