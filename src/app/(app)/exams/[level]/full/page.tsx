@@ -1,13 +1,11 @@
 import { notFound } from "next/navigation";
 import { SEED_LEVELS } from "@/db/seed-data";
+import { getExamConfig } from "@/config/exams";
 import { prepareExamSession } from "@/features/practice/practice-service";
 import { ExamRunner } from "@/features/practice/ExamRunner";
 
-export function generateStaticParams() {
-  return SEED_LEVELS.map((lvl) => ({
-    level: lvl.slug,
-  }));
-}
+// Per-request question selection — see exams/[level]/quick/page.tsx rationale.
+export const dynamic = "force-dynamic";
 
 export default async function FullMockExamPage({
   params,
@@ -21,10 +19,18 @@ export default async function FullMockExamPage({
     notFound();
   }
 
-  // Full Mock Exam uses exact real CSE-PPT allotments
-  const isPro = level === "professional";
-  const targetItemCount = isPro ? 170 : 165;
-  const timeLimitMinutes = isPro ? 190 : 160; // 3h10m (190m) Pro, 2h40m (160m) Subpro
+  // Item count and timer come from the catalog's level configuration — the
+  // single source of exam rules — never from hardcoded constants. (Phase 5:
+  // configuration-driven rules.)
+  const examConfig = getExamConfig("cse");
+  const catalogLevel = examConfig?.levels.find((l) => l.id === examLevel.trackId);
+  const targetItemCount = catalogLevel?.itemCount ?? catalogLevel?.items;
+  const timeLimitMinutes = catalogLevel?.durationMinutes ?? catalogLevel?.timeLimitMinutes;
+  if (!targetItemCount || !timeLimitMinutes) {
+    throw new Error(
+      `Full mock exam configuration missing for level "${examLevel.trackId}". Add items/timeLimitMinutes to the catalog level.`
+    );
+  }
 
   const { questions, rules } = prepareExamSession(level, "full", {
     questionLimit: targetItemCount,
@@ -48,6 +54,8 @@ export default async function FullMockExamPage({
           ? `Honest practice: ${questions.length} of ${targetItemCount} items available — the full bank is still being written. Timer: ${Math.floor(timeLimitMinutes / 60)}h ${timeLimitMinutes % 60}m.`
           : `${targetItemCount} items • ${Math.floor(timeLimitMinutes / 60)}h ${timeLimitMinutes % 60}m continuous single timer • Real CSE-PPT Simulation`
       }
+      examLevelId={examLevel.trackId}
+      trackId={examLevel.trackId}
     />
   );
 }
