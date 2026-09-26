@@ -23,9 +23,16 @@ export interface ActiveExamSessionDraft {
   lastSavedAt: string;
 }
 
+
 export interface AttemptSummary {
   id: string;
   title: string;
+  /**
+   * Explicit exam identity (guide §22): the track/level the attempt belongs
+   * to, e.g. "professional". Optional only for records created before exam
+   * identity was tracked; new attempts always set it.
+   */
+  examLevelId?: string;
   mode: string;
   percentage: number;
   rawScore: number;
@@ -37,6 +44,11 @@ export interface AttemptSummary {
 export interface StoredAttemptDetails {
   id: string;
   title: string;
+  /**
+   * Explicit exam identity (guide §22). Propagated to AttemptSummary on
+   * completion. Optional only for legacy records; new attempts always set it.
+   */
+  examLevelId?: string;
   mode: string;
   rules: ExamRuleConfig;
   questions: EngineQuestion[];
@@ -103,6 +115,7 @@ export interface SubjectReadinessMetric {
 
 import type { ExamWorkspace } from "@/lib/workspace/types";
 import type { StoredNote } from "./notes-service";
+import type { SyncAttemptDetail } from "./sync-payload";
 
 export interface GuestBackupPayload {
   version: 1 | 2;
