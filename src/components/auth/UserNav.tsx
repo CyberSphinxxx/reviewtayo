@@ -87,6 +87,9 @@ export function UserNav() {
     try {
       const res = await fetch("/api/user/account", { method: "DELETE" });
       if (res.ok) {
+        // RA 10173: deletion must also cover device-local data collected
+        // during onboarding/guest study (workspace, prefs, onboarding state).
+        LocalStorageService.clearAllGuestData();
         await signOut();
         setDropdownOpen(false);
         alert("Your account and personal data have been permanently erased.");
