@@ -121,6 +121,9 @@ export default function StudyPlanSettingsPage() {
       WorkspaceService.updateWorkspace(currentWorkspace.id, {
         levelId: levelId === "cse-subprofessional" ? "subprofessional" : "professional",
         ...(track ? { trackName: track } : {}),
+        // The plan template is a workspace concern too (guide §20) so each
+        // exam can keep its own strategy; preferences keep a legacy mirror.
+        studyPlanTemplate: planTemplate,
         ...nameUpdate,
       });
     }
