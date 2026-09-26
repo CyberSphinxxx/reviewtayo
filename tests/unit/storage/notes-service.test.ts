@@ -76,6 +76,15 @@ describe("NotesService", () => {
     expect(NotesService.count()).toBe(0);
   });
 
+  it("sweeps the onboarding state key too (review: rt_onboarding_v1 coverage)", () => {
+    window.localStorage.setItem(
+      "rt_onboarding_v1",
+      JSON.stringify({ version: 1, status: "completed", currentStep: "finish", maxStepReached: "finish", answers: { identityMode: "guest" }, updatedAt: new Date().toISOString() })
+    );
+    LocalStorageService.clearAllGuestData();
+    expect(window.localStorage.getItem("rt_onboarding_v1")).toBeNull();
+  });
+
   it("creates well-formed notes when called with no arguments", () => {
     const note = NotesService.create();
     expect(note.subject).toBe("General");
