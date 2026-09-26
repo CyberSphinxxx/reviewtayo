@@ -1,4 +1,95 @@
-# Walkthrough — Exam Hall & Owl Coach themes for the test page
+# Walkthrough — ReviewTayo audit round (current), onboarding (prior), with full change history below
+
+## Project audit round (latest)
+
+Full audit of the project for bugs, inefficiencies, and scalability risks. Scope, prioritized findings (P0–P2), non-findings, and the verification plan live in `implementation_plan.md` ("Project audit (current task)" section). Every confirmed finding was fixed and test-pinned; nothing is claimed fixed without evidence below.
+
+### Findings fixed
+
+1. **P0-1 — sync fabricated success (correctness/data integrity)** — `POST /api/user/sync` previously returned `success:true` without checking insert results. Rewritten (`src/app/api/user/sync/route.ts`): per-attempt `db.transaction` (attempt + answers atomic), success counted from `.returning({id})`, failed inserts → `success:false` + `warnings`, conflicts → `skipped`, inserts batched 100/row, correctness resolved server-side from the `choices` table (client-claimed correctness never trusted), `mistakeBank` honestly reported `skipped` + warning (no server table), 413 above 5 MB. Tests: `tests/unit/api/user-sync.test.ts` (12 tests incl. legacy workspace_cse shim, LET skip, long-prefix distinct ids).
+2. **P0-2 — account deletion not transactional** — the 6 deletes in `DELETE /api/user/account` could partially apply. Now one `db.transaction` (rollback → honest 500 "was not deleted"); transaction + 6 in-tx deletes + rollback asserted by `tests/unit/api/user-account.test.ts` (6 tests). GET export also collects `warnings` on per-table read failure instead of silently omitting data (P2-5).
+3. **P1-3 — fat sync payload (privacy/scalability)** — new slim contract `src/lib/storage/sync-payload.ts` + `LocalStorageService.buildSyncPayload()`: attempt summaries + selections + bookmark ids only; question text/choices/explanations never leave the device. `syncGuestDataToCloud()` sends `SyncPayloadV2`; route consumes it. Payload-shape test pins the contract.
+4. **P1-4 — attempt-id truncation collisions** — sync truncated ids to 64 chars; full deterministic ids now (distinct long-prefix ids pinned by test).
+5. **P1-6 — statically baked exam selection (confirmed live before fixing)** — all four session pages prerendered one fixed question order for every visitor. Added `export const dynamic = "force-dynamic"` to `src/app/(app)/exams/[level]/{quick,medium,full}/page.tsx` and `src/app/(app)/practice/[topicId]/page.tsx`; selector tests add 5-draw variation + no-duplicate-ids.
+6. **P2-5 — export data-loss on partial read failure** — covered in finding 2 (warnings array).
+
+### Non-findings (investigated, no defect)
+
+- Schema indexes adequate for the seed-data access patterns; exam engine remains pure (architecture guard PASS); double-submit already guarded (`isSubmittingRef`); timer drift already handled by wall-clock deltas + visibilitychange (pinned by `tests/unit/exam-engine/timer-drift.test.ts`).
+
+### Browser evidence (production build, port 3457, fresh build; server restarted on it)
+
+- The server found running was started **before** the build (PID start 11:46 vs BUILD_ID 12:52) and was alive during it — killed, `.next` removed, clean rebuild, restart.
+- `/exams/professional/quick`: default profile Q1 = number-sequence item; fresh incognito session Q1 = Constitution item → selection varies per session (previously identical on both).
+- `/practice/top-pro-vocab`: Q1 varies across plain reloads of the same URL in one session ("masinop" item vs "meticulous" item) → per-request selection, not profile-bound.
+- Build artifacts: zero prerendered exam/practice session HTML; prerender manifest contains no exam/practice session routes. Note: the build summary still prints `●` SSG for `/practice/[topicId]` — cosmetic only; `force-dynamic` wins at runtime.
+
+### Verification (actual results)
+
+1. `npm run verify`: **exit 0** — typecheck clean, lint clean, architecture guard PASS, Vitest **84 files / 586 tests** (+13), production build clean (87 routes).
+2. `PORT=3457 npm run test:e2e` (server killed first; Playwright serves its own build): **81 passed / 2 skipped / 0 failed**.
+3. Focused suites during development: user-sync + user-account + storage = 44 passed; exam-engine + practice = 69 passed; `npx tsc --noEmit` clean.
+
+### Remaining risks / blockers (documented, not silently dropped)
+
+- Real signed-in guest→account migration against a live DB needs a dev database with Better Auth credentials — not possible on this machine; covered by 12 unit tests + mocked-session e2e.
+- Sync idempotency on client retry (external-audit A04) is still open — the server is now honest about failures, but duplicate retry dedupe remains future work.
+- PWA service worker `net::ERR_CONTENT_DECODING_FAILED` console noise persists (pre-existing, benign).
+
+## Onboarding implementation + independent review
+
+Implemented the guided onboarding flow from `docs/onboarding-handoff/ONBOARDING_PLAN.md`, then reviewed it independently: code audit against the plan's acceptance criteria and real-browser journeys (not the implementing agent's walkthrough) on the production build at port 3457. This section records what was verified and the actual results.
+
+### What was built
+
+- **Data contract & storage** — `src/lib/onboarding/{types,onboarding-service,plan-preview,destination}.ts`: versioned device-local state `rt_onboarding_v1` (`not_started | in_progress | completed | dismissed`), sanitize-on-read (enum validation, dailyGoal clamp 1–200, studyDays 0–6, ISO date check), safe parse/parse-failure degradation, storage-failure tolerant writes. Plan preview and first-activity resolution are pure functions over the exam catalog — no activity is promised that the config cannot launch, no exam-specific branching (architecture guard passes).
+- **Routing matrix** — `getPostAuthDestination({status, established, returnTo})`: completed/dismissed/established → `returnTo ?? /dashboard`; new authenticated user → `/onboarding`. `sanitizeReturnTo` rejects non-`/` and `//` prefixed targets. Used by `AuthStandaloneForm`, `AuthModal` consumers, and the `/onboarding` redirect guard (`?edit=1` bypasses the guard for edit mode).
+- **8-step flow** — `src/features/onboarding/OnboardingFlow.tsx` + `useOnboardingFlow.ts` + `steps/*`: identity (guest/account cards with honest local-only copy + privacy link), exam/level (config-driven, level reset on exam switch), starting-point + optional exam date, rhythm (day chips + session presets), goal (presets + validated custom, honest time estimates), review (live preview with per-row edit links), personalize (appearance, text size with live sample, optional discovery), finish (atomic: preferences applied, workspace created/updated idempotently, status completed, route to the real first activity — real diagnostic route for CSE, honest dashboard fallback otherwise). Focus moves to each step heading; `role="status"` live region announces "Step N of 8"; truthful progressbar; skip on optional steps only.
+- **Entry surfaces** — homepage hero splits signed-out CTAs by returning vs brand-new; `SetupPlanCard` (dismissible, established-only) on the dashboard; standalone sign-in/create-account route through the same destination matrix; the existing AuthModal guest-sync migration screen handles guest→account data.
+
+### Gaps found by the review (all fixed, all test-pinned)
+
+1. **Consent before collection** — the flow collected answers before any consent decision (only the incidental global banner blocked it). Added the flow's own privacy gate ("Before we start": Accept all / Essential only / Decline & leave) writing the shared `csereviewer_cookie_consent` record; nothing persists until a choice is made; every advance control re-checks. Suppressed the global banner on `/onboarding` (its fixed overlay swallowed clicks on "Skip for now") and made it honor `cookie-consent-updated` events. Tests: `tests/unit/components/reviewtayo-home.test.tsx`.
+2. **Returning-guest hero CTA** — a completed guest saw "Get started" again. Hero now splits on saved onboarding state too → "Continue studying →" + "Update my study plan" (`?edit=1`).
+3. **Edit mode was a dead link** — completed users were redirected away and the service froze completed state. Now: completed users can revisit steps, change answers, re-finish into the same single workspace (no duplicates; explicit choices win, skipped answers keep existing workspace values), and `completedAt` is preserved. Dismissed users stay locked. Tests: `tests/unit/onboarding/onboarding-service.test.ts`.
+4. **Deletion coverage** — `clearAllGuestData` missed `rt_onboarding*`; account deletion didn't clear device-local data. Both fixed (RA 10173). Test: `tests/unit/storage/notes-service.test.ts`.
+5. **Missing step animation** — `animate-onboarding-step` had no CSS. Added a 200 ms slide/fade in `globals.css`, auto-collapsed by the reduced-motion rules (verified live: 1e-05s under reduce).
+
+### Browser journeys (production build, recorded endpoints)
+
+- **New guest, desktop**: homepage "Get started" → gate → "Essential only" → guest → CSE/Professional → skip starting-point → Mon+Wed → 20/day → review → Dark/Large/friend → save → `/exams/professional/quick` with explicit Professional identity and subtitle. Storage verified after save: `status:"completed"`, workspace `cse/professional/20`, prefs theme `dark` / text `large`.
+- **New guest, mobile 390×844**: same flow via keyboard (Tab/Space/Enter) — single column, no overflow, focus on each heading; skipped goal kept existing workspace dailyGoal (merge semantics); "Extra large" preview applied live (16→20px).
+- **Returning guest**: `/onboarding` revisit redirects to `/dashboard`; hero shows "Continue studying →".
+- **Refresh + Back/Forward midway**: reload on step 2 resumed at the saved step with all answers; in-app Back preserves answers without rewinding `maxStepReached`; browser Back/Forward across `/onboarding?edit=1` ↔ `/onboarding` keeps state (SPA history entries).
+- **Cancelled sign-in**: homepage modal → Escape closes, records nothing, focus restored to trigger; failed standalone sign-in shows `role="alert"` and stays put with escape hatches. Real signed-in first-login is covered by the mocked-session e2e specs (needs a dev DB to run live).
+- **Direct app entry**: fresh user → `/dashboard` renders a functional "Choose your exam" empty state (never a broken forced flow); legacy user (workspace, no onboarding) → dismissible `SetupPlanCard` → dismissal persists (`status:"dismissed"`) across reload.
+- **Edit-mode journey**: "Update my study plan" → review step → Edit goal 20→10 → re-finish → onboarding and workspace both 10, single workspace, `completedAt` unchanged.
+
+### Console / stability notes
+
+- Recurring `net::ERR_CONTENT_DECODING_FAILED` entries trace to the PWA service worker on this Windows dev box (pre-existing, unrelated to onboarding; all pages function).
+- Rebuilding while `next start` serves corrupts `.next` on Windows — stop the server before `npm run build` (bit this review twice; documented in PROGRESS.md).
+
+### Acceptance criteria — verdicts
+
+| Plan criterion | Verdict | Evidence |
+| --- | --- | --- |
+| 1. Hero CTA opens onboarding; direct routes can't bypass setup into a broken state | PASS | Hero link verified; `/dashboard` fresh entry renders functional empty state; `/onboarding` guard redirects completed/established users |
+| 2. Guest can finish without auth; accurate local-progress copy | PASS | Full guest journey; honest copy on identity/personalize/finish steps; privacy link |
+| 3. First-time signed-in enters flow; established resumes normally | PASS | Destination matrix unit-tested exhaustively (17 tests); e2e mocked-session specs; established users go to dashboard + dismissible setup card |
+| 4. Cancel/back/refresh preserve answers, no loops | PASS | Browser journeys above; resume-by-storage; sanitize prevents poisoned state loops |
+| 5. Exam/level from config; unavailable handled | PASS | `getAvailableExams()` only; empty-catalog fallback copy in `ExamStep` |
+| 6. Goal/rhythm/appearance/text size preview + save; skippable | PASS | Live previews verified in browser; skip path verified; storage traced per answer |
+| 7. Completed learner edits without replaying onboarding | PASS (after fix) | Edit-mode journey above; service tests |
+| 8. Guest→account merge idempotent, attempts preserved | PASS | Reused AuthModal sync screen (counts attempts/bookmarks, explicit "Sync to Cloud Now"/"Skip for Now"); destination matrix prevents loop |
+| 9. Mobile/desktop/keyboard/SR/contrast/reduced-motion checked in browser | PASS | Journeys + a11y evidence above; reduced motion verified via `[data-reduce-motion]` |
+| 10. verify + test:e2e pass; results recorded here and in PROGRESS.md | PASS | `npm run verify` exit 0 (84 files / 573 tests); e2e 81 passed / 2 skipped |
+
+**Actual verification results**: `npm run verify` → **exit code 0** (typecheck clean; ESLint clean; architecture guard PASS; Vitest 84 files / 573 tests passing; production build clean, 93 routes). `PORT=3457 npm run test:e2e` → **exit code 0** (81 passed, 2 skipped — pre-existing skips, 0 failed).
+
+---
+
+# Earlier rounds (history)
 
 ## Update 8 — Dashboard v2: sidebar shell + five new/changed sections
 
@@ -80,3 +171,4 @@ Deliberately untouched: `ResultsView.tsx` (already on brand tokens; every e2e-pi
 
 - Coach quips are stored in `coach.ts` (single bank) — easy to hand-tune later without touching components.
 - Concept E (results re-skin) was intentionally deferred: ResultsView already uses brand tokens, and its texts are heavily pinned by e2e; a dedicated pass can add the giant-score hero without touching logic.
+
