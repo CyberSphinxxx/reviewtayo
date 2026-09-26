@@ -260,6 +260,7 @@ describe("ExamRunner Component", () => {
         initialQuestions={mockQuestions}
         rules={mockRules}
         title="Diagnostic Quick Test"
+        trackId="professional"
       />
     );
 
@@ -298,6 +299,7 @@ describe("ExamRunner Component", () => {
         initialQuestions={mockQuestions}
         rules={mockRules}
         title="Diagnostic Quick Test"
+        trackId="professional"
       />
     );
 
@@ -588,6 +590,33 @@ describe("ExamRunner Component", () => {
       expect(mockPush).toHaveBeenCalledWith(expect.stringContaining("/results/"))
     );
     expect(screen.queryByText("Review Before Submission")).not.toBeInTheDocument();
+  });
+
+  it("records explicit exam identity on submitted attempts (guide §22 — no title sniffing)", async () => {
+    const { LocalStorageService } = await import("@/lib/storage");
+    const practiceRules: ExamRuleConfig = { ...mockRules, mode: "practice" };
+
+    render(
+      <ExamRunner
+        initialQuestions={mockQuestions}
+        rules={practiceRules}
+        title="Topic Practice"
+        trackId="subprofessional"
+      />
+    );
+
+    fireEvent.click(screen.getByText("Alpha Choice"));
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    fireEvent.click(screen.getByText("Delta Choice"));
+    fireEvent.click(screen.getByRole("button", { name: /submit test/i }));
+
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith(expect.stringContaining("/results/"))
+    );
+
+    const history = LocalStorageService.getAttemptHistory();
+    expect(history.length).toBeGreaterThan(0);
+    expect(history[0].examLevelId).toBe("subprofessional");
   });
 
   it("keeps the review confirmation for the full mock exam", () => {
