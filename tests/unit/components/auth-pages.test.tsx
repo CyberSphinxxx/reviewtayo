@@ -128,7 +128,7 @@ describe("Standalone Auth Pages (Concept C)", () => {
     expect(passwordInput).toHaveAttribute("type", "password");
   });
 
-  it("signs in with valid credentials and routes to /practice", async () => {
+  it("signs in with valid credentials and routes a new user to onboarding", async () => {
     vi.mocked(signIn.email).mockResolvedValueOnce({
       data: { user: { id: "u-1" } },
     } as unknown as ReturnType<typeof signIn.email>);
@@ -141,11 +141,40 @@ describe("Standalone Auth Pages (Concept C)", () => {
 
     await waitFor(() => {
       expect(signIn.email).toHaveBeenCalledWith({ email: "juan@example.ph", password: "Secret123!" });
-      expect(pushMock).toHaveBeenCalledWith("/practice");
+      // Fresh visitor (no history, no onboarding record) → guided setup.
+      expect(pushMock).toHaveBeenCalledWith("/onboarding");
     });
   });
 
-  it("creates an account and routes to /practice", async () => {
+  it("routes an established user to the dashboard after sign-in (never re-onboarded)", async () => {
+    window.localStorage.setItem(
+      "rt_workspaces_v1",
+      JSON.stringify([
+        {
+          id: "workspace_cse",
+          examId: "cse",
+          levelId: "professional",
+          createdAt: new Date().toISOString(),
+          lastAccessedAt: new Date().toISOString(),
+        },
+      ])
+    );
+    vi.mocked(signIn.email).mockResolvedValueOnce({
+      data: { user: { id: "u-1" } },
+    } as unknown as ReturnType<typeof signIn.email>);
+
+    render(<SignInPage />);
+
+    fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: "juan@example.ph" } });
+    fireEvent.change(screen.getByLabelText(/^Password$/i), { target: { value: "Secret123!" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
+
+    await waitFor(() => {
+      expect(pushMock).toHaveBeenCalledWith("/dashboard");
+    });
+  });
+
+  it("creates an account and routes a new user to onboarding", async () => {
     vi.mocked(signUp.email).mockResolvedValueOnce({
       data: { user: { id: "u-1" } },
     } as unknown as ReturnType<typeof signUp.email>);
@@ -163,7 +192,7 @@ describe("Standalone Auth Pages (Concept C)", () => {
         password: "ValidPass123!",
         name: "Juan Dela Cruz",
       });
-      expect(pushMock).toHaveBeenCalledWith("/practice");
+      expect(pushMock).toHaveBeenCalledWith("/onboarding");
     });
   });
 
