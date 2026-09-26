@@ -4,6 +4,7 @@ import React, { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn, signUp, requestPasswordReset, resetPassword } from "@/lib/auth/auth-client";
+import { getPostAuthDestinationFromState } from "@/lib/onboarding/destination";
 import { ReviewTayoOwl } from "@/components/brand/ReviewTayoOwl";
 import {
   FIELD_SETS,
@@ -221,7 +222,9 @@ export function AuthStandaloneForm({ initialState = "signin" }: { initialState?:
         if (res.error) {
           setFormError("The email or password is incorrect.");
         } else {
-          router.push("/practice");
+          // Loop-safe destination: completed/established → dashboard (or
+          // returnTo), first-time → onboarding (which resumes the saved step).
+          router.push(getPostAuthDestinationFromState());
           router.refresh();
         }
       } else if (state === "create") {
@@ -238,7 +241,9 @@ export function AuthStandaloneForm({ initialState = "signin" }: { initialState?:
             setFormError(res.error.message || GENERIC_ERROR);
           }
         } else {
-          router.push("/practice");
+          // New accounts enter onboarding; accounts that already finished it
+          // go to the dashboard. Established users are never re-onboarded.
+          router.push(getPostAuthDestinationFromState());
           router.refresh();
         }
       } else if (state === "reset") {
