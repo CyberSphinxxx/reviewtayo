@@ -12,6 +12,9 @@ export const metadata: Metadata = {
   },
 };
 
+// Per-request question selection — see exams/[level]/quick/page.tsx rationale.
+export const dynamic = "force-dynamic";
+
 export function generateStaticParams() {
   return SEED_TOPICS.map((t) => ({
     topicId: t.id,
