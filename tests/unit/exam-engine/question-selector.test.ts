@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   selectQuestionsForExam,
   type EngineQuestion,
@@ -52,6 +52,41 @@ describe("Generic Exam Engine — Question Selection", () => {
 
     const selected = selectQuestionsForExam(pool, rule);
     expect(selected.length).toBe(5);
+  });
+
+  it("varies selection across draws (per-request selection, review P1-6)", () => {
+    const rule: ExamRuleConfig = {
+      mode: "quick",
+      itemCount: 5,
+      timeLimitMinutes: 10,
+      passingScorePercentage: 80,
+      allowsFlagging: true,
+      hasContinuousTimer: true,
+    };
+
+    // A real PRNG: consecutive draws from a 9-item pool into 5 slots virtually
+    // never land on the identical ordered selection (P(all 5 identical) < 1e-8).
+    // Seeded Math would make this deterministic — this test pins that the
+    // selection is genuinely re-drawn per call (the bug generateStaticParams caused).
+    const draws = new Set(
+      Array.from({ length: 5 }, () => selectQuestionsForExam(pool, rule).map((q) => q.id).join(","))
+    );
+    expect(draws.size).toBeGreaterThan(1);
+  });
+
+  it("never repeats a question within one selection (no filler duplicates)", () => {
+    const rule: ExamRuleConfig = {
+      mode: "full",
+      itemCount: 9,
+      timeLimitMinutes: 190,
+      passingScorePercentage: 80,
+      allowsFlagging: true,
+      hasContinuousTimer: true,
+    };
+
+    const selected = selectQuestionsForExam(pool, rule);
+    const ids = selected.map((q) => q.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 
   it("respects subject distribution quotas when provided", () => {
