@@ -115,7 +115,6 @@ export interface SubjectReadinessMetric {
 
 import type { ExamWorkspace } from "@/lib/workspace/types";
 import type { StoredNote } from "./notes-service";
-import type { SyncAttemptDetail } from "./sync-payload";
 
 export interface GuestBackupPayload {
   version: 1 | 2;
