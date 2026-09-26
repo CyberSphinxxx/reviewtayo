@@ -77,7 +77,12 @@ export function CookieConsentBanner() {
 
     const existing = getStoredConsent();
     if (!existing || !existing.hasChosen) {
-      setShowBanner(true);
+      // The onboarding flow has its own first-party privacy gate; showing
+      // the global banner there too would stack two consent surfaces and
+      // the fixed banner would cover the flow's controls.
+      if (!window.location.pathname.startsWith("/onboarding")) {
+        setShowBanner(true);
+      }
     } else {
       setAnalyticsAllowed(existing.analytics);
       setAdsAllowed(existing.ads);
@@ -89,8 +94,24 @@ export function CookieConsentBanner() {
     };
 
     window.addEventListener("open-cookie-settings", handleReopen);
+
+    // Another surface (e.g. the onboarding privacy gate) may make the
+    // consent decision first; honor it instead of lingering on top of the
+    // page where the fixed banner would swallow clicks underneath.
+    const handleConsentUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<CookieConsentState>).detail;
+      if (detail?.hasChosen) {
+        setAnalyticsAllowed(detail.analytics);
+        setAdsAllowed(detail.ads);
+        setShowBanner(false);
+        setShowSettings(false);
+      }
+    };
+    window.addEventListener("cookie-consent-updated", handleConsentUpdated);
+
     return () => {
       window.removeEventListener("open-cookie-settings", handleReopen);
+      window.removeEventListener("cookie-consent-updated", handleConsentUpdated);
     };
   }, [handleOpenSettings]);
 
