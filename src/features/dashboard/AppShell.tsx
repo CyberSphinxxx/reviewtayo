@@ -21,6 +21,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { DashboardOnboardingView } from "@/features/dashboard/DashboardOnboardingView";
+import { SetupPlanCard } from "@/features/dashboard/SetupPlanCard";
 import { ReviewTayoOwl } from "@/components/brand/ReviewTayoOwl";
 import { useExamWorkspace } from "@/lib/workspace/useExamWorkspace";
 import { WorkspaceService } from "@/lib/workspace/workspace-service";
@@ -481,7 +482,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
             </div>
           ) : (
-            children
+            <>
+              <SetupPlanCard />
+              {children}
+            </>
           )}
         </main>
       </div>
