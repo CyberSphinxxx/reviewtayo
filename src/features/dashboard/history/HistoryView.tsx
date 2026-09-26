@@ -47,7 +47,7 @@ export function HistoryView() {
             Completed quick tests, medium tests, and full mock exams will appear here automatically.
           </p>
           <Link
-            href="/exams/professional/quick"
+            href="/practice"
             className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#8a1630] text-white text-sm font-extrabold"
           >
             Launch first quick test
