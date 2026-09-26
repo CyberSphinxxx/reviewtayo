@@ -14,6 +14,7 @@ import type {
 import { WORKSPACE_STORAGE_KEYS, type ExamWorkspace } from "@/lib/workspace/types";
 import { getExamSubjects } from "@/config/exams";
 import { NotesService, NOTES_STORAGE_KEY } from "./notes-service";
+import type { SyncAttemptDetail, SyncPayloadV2 } from "./sync-payload";
 
 // Storage Key Constants
 export const STORAGE_KEYS = {
@@ -267,6 +268,34 @@ export class LocalStorageService {
         }
       }
 
+      // 5. One-time migration (guide §54): the weekly plan template used to be
+      // a GLOBAL preference; it belongs to the exam workspace. Move it once,
+      // then remove the global value so it can never leak across exams.
+      try {
+        const prefsRaw = window.localStorage.getItem("csereviewph_user_preferences_v1");
+        if (prefsRaw) {
+          const prefs = JSON.parse(prefsRaw);
+          const template = prefs?.study?.planTemplate;
+          if (typeof template === "string" && template) {
+            const workspaces = JSON.parse(
+              window.localStorage.getItem(WORKSPACE_STORAGE_KEYS.WORKSPACES) || "[]"
+            ) as ExamWorkspace[];
+            const currentId = window.localStorage.getItem(WORKSPACE_STORAGE_KEYS.CURRENT_WORKSPACE_ID);
+            const target = workspaces.find((w) => w.id === currentId) || workspaces[0];
+            if (target && !target.studyPlanTemplate) {
+              const migrated = workspaces.map((w) =>
+                w.id === target.id ? { ...w, studyPlanTemplate: template } : w
+              );
+              window.localStorage.setItem(WORKSPACE_STORAGE_KEYS.WORKSPACES, JSON.stringify(migrated));
+            }
+            delete prefs.study.planTemplate;
+            window.localStorage.setItem("csereviewph_user_preferences_v1", JSON.stringify(prefs));
+          }
+        }
+      } catch {
+        // Non-fatal template migration failure
+      }
+
       this.migrated = true;
     } catch (e) {
       console.warn("[LocalStorageService] Migration skipped or failed:", e);
@@ -279,10 +308,17 @@ export class LocalStorageService {
 
   public static resolveWorkspaceId(workspaceId?: string): string {
     if (workspaceId) return workspaceId;
+    // Resolution must be stable within a call chain: runMigration() provisions
+    // the workspace for users with legacy data, and some methods resolve keys
+    // before any other call has triggered migration. It is idempotent.
+    this.runMigration();
     const currentId = safeGetItem<string | null>(WORKSPACE_STORAGE_KEYS.CURRENT_WORKSPACE_ID, null);
     if (currentId) return currentId;
     const workspaces = safeGetItem<ExamWorkspace[]>(WORKSPACE_STORAGE_KEYS.WORKSPACES, []);
-    return workspaces[0]?.id || "workspace_cse";
+    // No CSE fabrication (guide §26): a visitor who has not chosen an exam
+    // gets a neutral bucket — their first attempts must not silently become
+    // CSE progress. Real workspaces are created only by explicit choice.
+    return workspaces[0]?.id ?? "workspace_unassigned";
   }
 
   public static getWorkspaceStorageKey(
@@ -399,6 +435,7 @@ export class LocalStorageService {
     const summary: AttemptSummary = {
       id: attempt.id,
       title: attempt.title,
+      examLevelId: attempt.examLevelId,
       mode: attempt.mode,
       percentage: attempt.scoreResult.percentageScore,
       rawScore: attempt.scoreResult.rawScore,
@@ -493,11 +530,13 @@ export class LocalStorageService {
     //    today as the most recent "clean slate" date (Clean-slate badge).
     this.markSrsDueCleared(workspaceId);
 
-    // 6. Clean up active draft for this exam if one exists
-    const levelSlug = attempt.title.toLowerCase().includes("subprof")
-      ? "subprofessional"
-      : "professional";
-    this.clearActiveDraft(levelSlug, attempt.mode, undefined, workspaceId);
+    // 6. Clean up the active draft for the exam session that just completed.
+    // The attempt carries its explicit examLevelId (guide §22); legacy records
+    // without one get no speculative draft deletion — the generic draft-clear
+    // paths in the runner already handle normal exits.
+    if (attempt.examLevelId) {
+      this.clearActiveDraft(attempt.examLevelId, attempt.mode, undefined, workspaceId);
+    }
   }
 
   public static deleteAttempt(attemptId: string, workspaceId?: string): void {
@@ -1025,6 +1064,44 @@ export class LocalStorageService {
     return JSON.stringify(this.exportAllGuestData(), null, 2);
   }
 
+  /**
+   * Builds the slim guest→account sync payload. Unlike the full backup
+   * (exportAllGuestData, which must round-trip for import), the sync payload
+   * carries only what the server actually stores: attempt summaries, answer
+   * selections, and bookmark ids. Question text, choices, and explanations
+   * never leave the device (RA 10173 data minimization), and the server
+   * resolves correctness from its own choices table.
+   */
+  public static buildSyncPayload(): SyncPayloadV2 {
+    this.runMigration();
+    const history = this.getAttemptHistory();
+    const attempts: Record<string, SyncAttemptDetail> = {};
+
+    for (const h of history) {
+      const detail = this.getAttemptDetails(h.id);
+      if (!detail) continue;
+      attempts[h.id] = {
+        examLevelId: h.examLevelId ?? detail.examLevelId,
+        subjectIds: detail.questions?.map((q) => q.subjectId).filter(Boolean),
+        answers: (detail.answers ?? []).map((a) => ({
+          questionId: a.questionId,
+          selectedChoiceId: a.selectedChoiceId ?? null,
+          timeSpentSeconds: a.timeSpentSeconds ?? 0,
+        })),
+      };
+    }
+
+    return {
+      history,
+      attempts,
+      bookmarks: this.getBookmarks().map((b) => ({
+        id: b.id,
+        bookmarkedAt: b.bookmarkedAt,
+      })),
+      mistakeBankCount: this.getMistakeBank().length,
+    };
+  }
+
   public static async syncGuestDataToCloud(): Promise<{
     success: boolean;
     message?: string;
@@ -1032,7 +1109,7 @@ export class LocalStorageService {
     error?: string;
   }> {
     try {
-      const payload = this.exportAllGuestData();
+      const payload = this.buildSyncPayload();
       const res = await fetch("/api/user/sync", {
         method: "POST",
         headers: {
@@ -1160,6 +1237,7 @@ export class LocalStorageService {
             k.startsWith("rt_workspaces") ||
             k.startsWith("rt_current_workspace") ||
           k.startsWith("rt_ws_") ||
+          k.startsWith("rt_onboarding") ||
           k === NOTES_STORAGE_KEY ||
           k === "attempts_history" ||
           k === "mistake_bank" ||
