@@ -62,8 +62,12 @@ export function TestModeBar({
           <div className="flex flex-col items-center justify-center text-center min-w-0 px-1 sm:px-2">
             <div className="flex items-center gap-1 sm:gap-1.5 text-xs sm:text-sm font-bold text-[#1b1216] truncate">
               <span className="font-display truncate">{examName}</span>
-              <span className="text-[#d8c7cd] font-normal">&bull;</span>
-              <span className="text-brand-700 font-semibold truncate">{levelName}</span>
+              {levelName && (
+                <>
+                  <span className="text-[#d8c7cd] font-normal">&bull;</span>
+                  <span className="text-brand-700 font-semibold truncate">{levelName}</span>
+                </>
+              )}
             </div>
             <div className="text-[11px] sm:text-xs text-[#6d5d63] font-medium tracking-wide">
               Item {currentIndex + 1} of {totalQuestions}
