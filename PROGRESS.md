@@ -2,92 +2,64 @@
 
 Full prior status is archived in `ARCHIVES/progress-history.md`.
 
-**Current status: STAGE-1 AUDIT-PLAN FIXES COMPLETE (VERIFY EXIT 0 — 519 TESTS, 0 LINT PROBLEMS)**
+**Current status: PROJECT AUDIT — 6 CONFIRMED FINDINGS FIXED (VERIFY EXIT 0 — 84 FILES / 586 TESTS; E2E 81 PASSED / 2 SKIPPED)**
 
-## External-audit plan round (latest)
+## Audit round (latest)
 
-Triage + implementation of Stage 0/1 items from the external "Audit and Data-Efficiency Plan" (2026-09-26). All findings were re-verified against this checkout before acting; several were confirmed, one was disproven for this checkout, and the rest are tracked below as open work.
+Full project audit (bugs, inefficiencies, scalability) — plan, findings, and non-findings in `implementation_plan.md` ("Project audit" section). Six confirmed findings, all fixed, all pinned by tests, all verified against the production build.
 
-**Fixed this round**
-- **A01 — duplicated filler + cross-level mixing**: `prepareExamSession` now scopes the candidate pool to the requested exam level (subject→topic→question join), and the clone-filling loop that repeated questions to fake 170/165/30-item exams is removed. Insufficient banks yield an honest shorter session; the full-exam page shows a clearly labeled "Honest practice: N of TARGET items" subtitle. Professional exams can no longer include clerical items or Subprofessional IDs, and vice versa (pinned by leak tests both directions).
-- **A07 — empty-topic unusable exam**: the topic-practice page now shows a friendly "No questions here yet" empty state instead of opening a timed runner at "Item 1 of 0". A `hasStartableQuestions` helper documents the invariant.
-- **A03 — fabricated results**: `/results/[attemptId]` no longer manufactures a 70% score from seed data for unknown/evicted attempts. There is an explicit honest "Result not available on this device" state (with history/practice links and a statement that estimates are never substituted). Pinned by new unit tests (`tests/unit/results/results-page.test.tsx`).
-- **A08 — fake-successful question reports**: `/api/questions/report` no longer returns 201 after a failed DB write (503 now), no longer accepts a client-supplied `userId` (identity comes only from the Better Auth session), and the modal already renders the error path. Covered by expanded unit tests including a write-failure and a spoofed-userId case.
-- **A02/A14 (partial, safe seam)**: `ExamRunner` autosave no longer overwrites an unconfirmed draft (the resume banner gates saving), and timer ticks no longer serialize ~190 KB drafts every second — a save-signature check persists only on genuine answer/flag/navigation changes. Deeper deadline-based recovery remains open work.
+**Fixed (each pinned by a behavior test)**
 
-**Disproven for this checkout**
-- **A05 as stated**: seed questions have no `status` field at all, so enforcing a publication gate today would blank the entire catalog. The real gap is that the schema lacks the publication lifecycle; adding it (and then gating practice on it) is a content-ops feature, not a one-line fix. Tracked under "Next".
+- **P0-1 sync fabricated success** — `POST /api/user/sync` rewrote `src/app/api/user/sync/route.ts`: real success counting via `.returning({id})`; failed inserts now yield `success:false` + per-item `warnings` (message `/NOT synced/i`), conflicts are `skipped`; each attempt + its answers insert atomically in `db.transaction`; inserts batched (100/row); correctness resolved server-side from the `choices` table via one `inArray` query (client-claimed correctness never trusted); `mistakeBank` reported `skipped` + warning (honest — no server table exists); 413 for bodies > 5 MB (`MAX_SYNC_BODY_BYTES`). Tests: `tests/unit/api/user-sync.test.ts` (12).
+- **P0-2 non-transactional account deletion** — `DELETE /api/user/account` now wraps all 6 deletes in `db.transaction` (partial-deletion state impossible; a mid-delete failure rolls back and returns an honest 500). `GET` export collects `warnings` when a table read fails instead of silently omitting data (P2-5). Tests: `tests/unit/api/user-account.test.ts` (6).
+- **P1-3 fat sync payload** — new slim contract `src/lib/storage/sync-payload.ts` (`SyncPayloadV2`) + `LocalStorageService.buildSyncPayload()`: summaries + answer selections + bookmark ids only; question text, choices, and explanations never leave the device. `syncGuestDataToCloud()` sends it; the route consumes it. Payload-shape test pins the contract.
+- **P1-4 attempt-id truncation collision** — sync no longer truncates attempt ids to 64 chars; deterministic full ids (long-prefix distinct ids pinned by test).
+- **P1-6 statically baked exams (confirmed in browser)** — `generateStaticParams` prerendered one fixed question order for every visitor on the 4 exam/practice session pages. Added `export const dynamic = "force-dynamic"` to `src/app/(app)/exams/[level]/{quick,medium,full}/page.tsx` and `src/app/(app)/practice/[topicId]/page.tsx`. Build output: zero prerendered exam/practice session HTML; selector tests add 5-draw variation + no-duplicate-ids.
+- **P2-5** covered above (export warnings); **non-findings** documented: schema indexes adequate, exam-engine purity intact, double-submit already guarded (`isSubmittingRef`), timer drift already handled by wall-clock deltas (`tests/unit/exam-engine/timer-drift.test.ts`).
 
-**Open from the plan (not started, by design)**
-- A02 full fix: single persisted deadline + elapsed-time recovery across reloads/deployments; draft question-set versioning.
-- A04: transactional/idempotent cloud sync, canonical score validation, paginated pull.
-- A06: full offline journey verification and SW navigation handling.
-- A09: per-attempt selection vs static build-time selection; difficulty distribution in the selector.
-- A10/A11/A12: export/import round-trip, unsynced eviction guard, per-account storage isolation.
-- A13: production auth secret fail-closed + real reset-email delivery (requires owner credentials/provider access).
-- A15: `npm audit` shows 3 production advisories (drizzle-orm SQL-injection class, next/postcss via Next) — all need major-version upgrades (drizzle-orm 0.39→0.45, next 15→16), deliberately not bundled into this correctness round.
-- Stage 2+ storage/sync feature, Google provider (Better Auth + Neon), monitoring.
+**Browser evidence (production build, port 3457)**: `/exams/professional/quick` Question 1 differs across two independent browser sessions (number-sequence vs Constitution item); `/practice/top-pro-vocab` Question 1 varies across reloads of the same URL ("masinop" vs "meticulous" item) — per-request selection confirmed on both surfaces.
 
-**Verification**: `npm run verify` exit 0 — 80 files / 519 tests (8 new tests: honest selection, leak guards, honest results, report honesty), ESLint 0 problems, production build clean.
+**Verification (actual results)**
 
-## Done
+- `npm run verify`: **exit 0** — typecheck clean, ESLint clean, architecture guard PASS, Vitest **84 files / 586 tests** (was 573), production build clean (87 routes; `/exams/[level]/*` now `ƒ` Dynamic).
+- `PORT=3457 npm run test:e2e`: **81 passed / 2 skipped (pre-existing) / 0 failed** against the production build.
+- Note: the build summary still labels `/practice/[topicId]` `●` SSG, but the prerender manifest contains no topic routes and no topic HTML is emitted — nothing is baked (cosmetic label; `force-dynamic` + `generateStaticParams` interplay).
 
-Rebuilt the auth modal (`signinmodal.html` Concept A) as a polished split-panel dialog covering Sign in, Create account, and Forgot password, reusing all existing auth logic end to end.
+## Onboarding round
 
-- **Structure & reuse (no duplicated auth logic)**:
-  - New `src/components/auth/auth-fields.ts`: single source of truth for field specs (labels, icons, placeholders, `autocomplete` attributes), per-field validation rules, state meta copy (title/sub/CTA), generic API-error copy, and the brand benefits list. Shared by the modal form and the standalone pages so validation and copy can never drift.
-  - `AuthForm.tsx` rewritten in place with the **same props contract** (`mode`/`onModeChange`/`onSuccess`/`onGuestContinue`, `AuthMode` type) and the same real calls (`signIn.email`, `signUp.email`, `requestPasswordReset`). It now renders from the shared specs and adds per-field inline errors (`aria-invalid` + `aria-describedby`), an inline "Check your inbox" confirmation state, and the top **Sign in | Create account** tab switcher.
-  - `AuthStandaloneForm.tsx` now consumes the shared field specs (its five states and behavior are unchanged; tests still pass untouched).
-  - `AuthModal.tsx` is the split-panel shell: maroon brand panel + form panel, plus the preserved post-auth guest-data sync screen verbatim.
-- **Brand panel (fixed maroon — shell choice, both themes)**: gold "Live · Civil Service Exam" pill, the app's own `ReviewTayoOwl` (cap, bob, tracked pupils — the broken owl art in signinmodal.html was NOT used), "Review smarter. Pass sooner." headline, subcopy, gold-check benefits list (Sync / Track / Your data), and the ReviewTayo · reviewtayo.online footer line.
-- **Form panel (theme-aware tokens)**: tab switcher, "Welcome back" heading + subcopy, Email (mail icon, `juan@example.ph`), Password (lock icon, eye toggle with accessible name), inline "Forgot password?" link, maroon Sign In button, "Continue without an account" ghost button, "New to CSE Reviewer? Create a free account" footer. The RA 10173 Data Privacy box now shows on Create account only (it's a decision, not a login concern — matches the reference note).
-- **States in every flow**: inline per-field validation (focus jumps to first invalid), API failure banners (`role="alert"`), duplicate-email signup mapped to the email field, loading spinners with disabled buttons (duplicate-submission prevention), success states, and the reset confirmation that never confirms whether an email exists.
-- **Accessibility**: semantic labeled forms; Escape closes; Tab is trapped in the dialog (wrap both directions); focus moves to the dialog on open and returns to the trigger on close (fixed a real bug where the effect re-ran on parent re-render and clobbered the saved trigger); visible focus rings; accessible names on the eye and × icon buttons; decorative SVGs hidden.
-- **Responsive**: single-column stack below `md` with the brand panel hidden; no horizontal scroll at 390px; every action visible in-viewport.
+Implemented the 8-step onboarding flow per `docs/onboarding-handoff/ONBOARDING_PLAN.md` (localStorage-first state `rt_onboarding_v1`, guest/account identity, config-driven exam step, skippable optional steps, review + edit links, personalize, atomic finish into workspace + first activity), then ran an **independent review pass** — code audit + real-browser journeys — which found and fixed five gaps. All fixes re-verified in the browser against the production build.
 
-## Verified
+**Fixed during the review round (each pinned by a behavior test)**
 
-- `npm run verify`: **PASS (exit 0)** — TypeScript 0 errors, ESLint 0 errors (26 warnings, all pre-existing — this round's FieldMetaKey unused-import warning was removed), Architecture Guard PASS, Vitest **79 files / 510 tests** (auth suites extended: modal 10, form 11, pages 14), Next.js production build clean.
-- **Correctness round (this session)**: added a real **in-flight submit guard** (`inFlightRef`) to both `AuthForm.tsx` and `AuthStandaloneForm.tsx` — Enter inside an input fires the form submit event even while the submit button is disabled, so `disabled={loading}` alone allowed a fast Enter to double-fire auth requests. The ref early-returns a second submit across all flows (sign-in/create/reset, plus newpass on the standalone form). Pinned by two new unit tests that submit while a deferred promise is pending and assert exactly one API call (auth-form + auth-pages suites).
-- **e2e spec refreshed & run**: `tests/e2e/auth-modal.spec.ts` was rewritten for the split-panel surface (brand panel, tab switcher with `aria-pressed` scoped to the switcher group, eye toggle, inline-validation boundary of the forgot-password flow, Escape → focus returns to trigger) while keeping the five standalone-page tests. **All 7 pass** against the production build (`PORT=3457 npx playwright test tests/e2e/auth-modal.spec.ts`).
-- **playwright.config.ts**: `baseURL`/`webServer.url` now read `PORT` from the env instead of hardcoding 3000 — Windows `next start` can silently bind a random port, which made the old config's webServer check time out. `PORT=3457 npx playwright test ...` runs the stack reliably; default stays 3000.
-- **Audit round (prior session)**: re-ran `npm run verify` green, redid the browser pass on port 51090 (desktop light flows, all three modes, tab trap, Escape→focus-return, trusted eye-toggle click), completed the interrupted **dark-theme recheck** live (theme-aware form panel on dark tokens, fixed-maroon brand panel, hydration-warning overlay confirmed pre-existing), and removed the round's one new lint warning (`FieldMetaKey` unused import in `AuthStandaloneForm.tsx`; tsc + eslint re-verified after).
-- Browser pass (real Chromium, dev server):
-  - Desktop 1280×800 light + dark: split panel matches the reference (badge, owl, headline, checklist, tabs, fields with icons, eye toggle, CTA, ghost button, footer).
-  - Tab switch Sign in ↔ Create account (aria-pressed, name/email/password + meter + privacy box).
-  - Forgot password: form → real API call → "Check your inbox" confirmation with happy owl → Back to sign in.
-  - Inline validation on empty submit (three errors at once, focus on first invalid); wrong-credentials submit shows the form-level alert and re-enables the button.
-  - Eye toggle (trusted click), Escape close, Tab wrap-around trap, focus returns to the trigger after close.
-  - Mobile 390×844: brand panel hidden, no horizontal scroll, submit/guest/footer all visible without scrolling.
-- Dev-env note (pre-existing, not from this change): server-side better-auth resolves `baseURL` to `http://localhost:3000` via the `getBaseUrl()` fallback, so auth API calls 403 ("Invalid origin") on any other local port. Run `npm run dev` with `BETTER_AUTH_URL`/`NEXT_PUBLIC_APP_URL` set to the actual port for local auth testing; production (single canonical origin) is unaffected.
+- **Consent gate on the flow itself**: onboarding now shows its own privacy gate before collecting any answers (`Before we start` → Accept all / Essential only / Decline & leave) writing the same `csereviewer_cookie_consent` record the global banner uses; nothing is recorded (status stays `not_started`) until a choice is made, and every advance control re-checks consent. The global banner no longer renders on `/onboarding` (previously its fixed overlay swallowed clicks on "Skip for now"), and it now honors external `cookie-consent-updated` events from any surface. Tests: `tests/unit/components/reviewtayo-home.test.tsx`.
+- **Returning-guest hero CTA**: `HeroSection` signed-out branch now treats a visitor with saved onboarding state (not just attempt history/workspaces) as returning → "Continue studying →" (`/dashboard`) + "Update my study plan" (`/onboarding?edit=1`); brand-new visitors keep "Get started" + "Sign in". Previously a completed guest saw "Get started" again.
+- **Edit mode is real**: completed users can re-enter via `?edit=1` (hero secondary CTA, dashboard `SetupPlanCard`), land on the review step, change answers (service no longer freezes completed state), and re-finish; re-finishing updates the same single workspace (explicit choices win; skipped answers keep existing workspace values via createWorkspace merge) and `completedAt` is preserved (first completion wins, not overwritten). Dismissed users stay locked out. Tests in `tests/unit/onboarding/onboarding-service.test.ts`.
+- **RA 10173 deletion coverage**: `clearAllGuestData` now sweeps `rt_onboarding*` (the new onboarding answers were previously missed), and account deletion (`UserNav` → `DELETE /api/user/account`) clears device-local data before sign-out. Test in `tests/unit/storage/notes-service.test.ts`.
+- **Missing step-transition animation**: `animate-onboarding-step` was referenced but had no CSS; added a 200 ms slide/fade keyframe in `globals.css` (auto-collapsed by the global reduced-motion rules — verified live: computed duration 1e-05s under reduce).
 
-## Project audit round (latest)
+**Browser evidence (production build, port 3457)**: fresh guest desktop+mobile (390×844) end-to-end; refresh resumes saved step with answers; in-app Back and browser Back/Forward keep state; failed sign-in shows `role="alert"` and escapes to the previous step; homepage modal cancel restores focus and records nothing; direct `/dashboard` entry as a fresh user renders a functional empty state (no broken forced flow); legacy user sees dismissible `SetupPlanCard`, dismissal persists (`dismissed`) across reload; keyboard-only step advance (Tab/Space/Enter, focus moves to each step heading); live region announces "Step N of 8"; radiogroup/`aria-pressed` semantics present; text-size preview applies live (16→20px) and persists; skipped optional steps keep truthful progress and defaults.
 
-A full-project audit found and fixed the following. All fixed items verified: `npm run verify` exit 0, **ESLint 0 errors / 0 warnings** (was 26 pre-existing warnings), Vitest **79 files / 511 tests**, production build clean.
+**Verification (actual results)**
 
-**Bugs fixed**
-- **Hydration mismatch warning on every page** (`app/layout.tsx`): the anti-FOUC inline script mutates `<html>` before React hydrates, so React logged a `className="dark"` mismatch on every load. Fixed with `suppressHydrationWarning` on `<html>` (correct scope — the mutation is intentional and limited to the class attribute). Verified live: a clean page load now produces a zero-error console.
-- **Server-side auth base URL ignored the actual dev port** (`lib/env.ts` step 8): local fallback was hardcoded to `http://localhost:3000`, so `better-auth`'s origin check returned 403 "Invalid origin" on any other port (root cause of the dev-env quirk documented below). Now honors `process.env.PORT` (falls back to 3000); covered by a new unit test (`honors PORT in the local development fallback`). Production paths unchanged.
+- `npm run verify`: **exit 0** — typecheck clean, ESLint clean, architecture guard PASS, Vitest **84 files / 573 tests**, production build clean (93 routes).
+- `PORT=3457 npm run test:e2e`: **81 passed / 2 skipped (pre-existing) / 0 failed** against the production build.
+- Known non-blocking noise: recurring `net::ERR_CONTENT_DECODING_FAILED` console entries from the PWA service worker (pre-existing, unrelated to onboarding; pages function). Windows dev quirk: rebuilding while `next start` runs corrupts `.next` — always stop the server before `npm run build`.
 
-**Inefficiencies / dead code fixed (26 → 0 lint warnings)**
-- `ReviewView.tsx`: the `stats` memo called `LocalStorageService.getMistakeStats()` while declaring `[mistakes]` as its dependency — a hidden storage read inside `useMemo` that only worked by accident. Extracted a pure `computeMistakeStats(items)` helper in ReviewView and derive stats from the `mistakes` state (which `reload()` refreshes after every mutation). Dep warning gone; behavior identical.
-- Removed all dead imports/vars flagged by lint: `HelpCircle` (guides page), `createPortal` (AppShell), `Flame/Target/TrendingUp/BookMarked/RotateCcw/ListChecks` + `startOfWeekIso/addDaysIso` + unused `weekDates` (DashboardView), `Bookmark/Layers` + `ReviewTayoOwl` (AchievementsView), `canPrev` (StudyPlanView), `GraduationCap` + `ReviewTayoOwl` + unused `currentExamConfig`/`levelShort`/`enabled` + unused `index` param (PracticeHubView), `StoredNote` (local-storage-service), `vi`/`beforeEach` (dashboard.test), `NotesService` (new-surfaces.test), `StoredNote` (notes-service.test), unused `FieldMetaKey` (AuthStandaloneForm, prior round).
+## Prior rounds
 
-**Drift-risk dedupe**
-- `AuthStandaloneLayout.tsx` carried its own inline copy of the three-item benefits list (the drift the shared `auth-fields.ts` module was created to prevent). Now imports `BENEFITS` from `auth-fields`; one source of truth for modal + standalone pages.
-
-**Ops note**
-- During verification the 51090 dev server began returning 500s (`Cannot find module './5873.js'`) — a stale `.next` chunk cache after heavy file edits, not an app bug. Fixed by killing the server, deleting `.next`, and restarting; page loads cleanly (200) with a zero-error console.
+- External-audit fixes (A01/A03/A07/A08, partial A02/A14), auth modal rebuild, dashboard v2 shell, exam-hall/coach theming, hero + /cse redesign — see `ARCHIVES/progress-history.md` and the lower sections of `walkthrough.md`.
 
 ## Blocked
 
-- None.
+- Real signed-in migration journey against a live database (needs a dev DB with Better Auth credentials on this machine); sync migration is covered by unit tests + mocked-session e2e.
 
 ## Needs Human
 
-- None.
+- Dev DB credentials for the live signed-in migration journey; real SMTP credentials for A13 reset-email delivery.
 
 ## Next
 
-- Ready for user review.
-- Optional: a second e2e test covering the forgot-password confirmation state against a mocked/staged reset endpoint (current spec deliberately stops at the inline-validation boundary to keep e2e deterministic against the real API).
+- From the external audit (unchanged): A02 full deadline recovery, A04 sync idempotency (sync is now honest but client retry dedupe is still open), A05 publication lifecycle, A13 real reset-email delivery (needs credentials), dependency upgrades (drizzle-orm, next major versions).
+- Optional: signed-in first-login journey against a real dev database (auth currently only testable via mocked-session e2e specs on this machine).
+- Optional: e2e spec for the onboarding consent gate (unit-tested; browser-verified manually).
+- From the external audit (unchanged): A02 full deadline recovery, A04 sync idempotency, A05 publication lifecycle, A13 real reset-email delivery (needs credentials), dependency upgrades (drizzle-orm, next major versions).
