@@ -9,6 +9,7 @@ import type {
 } from "./types";
 import { LocalStorageService } from "@/lib/storage/local-storage-service";
 import { WorkspaceService } from "@/lib/workspace/workspace-service";
+import { EXAM_CATALOG, getExamConfig } from "@/config/exams";
 import { getStoredConsent, saveStoredConsent } from "@/components/privacy/CookieConsentBanner";
 
 import { NEXT_UPCOMING_EXAM_DATE } from "@/lib/exam-guide/csc-data";
@@ -81,7 +82,11 @@ function sanitizePreferences(raw: unknown): UserPreferences {
 
   // Study
   const rawStudy: Partial<StudyPreferences> = (data.study && typeof data.study === "object") ? data.study : {};
-  const validLevelIds = ["cse-professional", "cse-subprofessional"];
+  // Level ids are validated against the catalog ({examId}-{levelId}), not a
+  // hardcoded CSE whitelist — any registered exam's levels are representable.
+  const validLevelIds = EXAM_CATALOG.flatMap((exam) =>
+    exam.levels.map((lvl) => `${exam.id}-${lvl.id}`)
+  );
   const levelId = validLevelIds.includes(rawStudy.levelId as string)
     ? (rawStudy.levelId as string)
     : defaults.study.levelId;
@@ -266,13 +271,21 @@ export class PreferencesService {
           WorkspaceService.getAllWorkspaces().length > 0;
         if (hasChosenExam) {
           const active = WorkspaceService.getCurrentWorkspace();
+          // Derive the fallback label from the exam's catalog definition
+          // instead of assuming CSE professional/subprofessional.
+          const mirrorExam = getExamConfig(next.study.examId);
+          const mirrorLevelId = next.study.levelId.startsWith(`${mirrorExam?.id}-`)
+            ? next.study.levelId.slice(`${mirrorExam?.id}-`.length)
+            : next.study.levelId;
+          const mirrorLevel = mirrorExam?.levels.find((l) => l.id === mirrorLevelId);
           const fallbackName =
             (active?.examId === "cse" && active?.trackName
               ? `CSE-PPT ${active.trackName}`
               : undefined) ||
-            (next.study.levelId.includes("subprof")
-              ? "CSE-PPT Subprofessional"
-              : "CSE-PPT Professional");
+            (mirrorExam && mirrorLevel
+              ? `${mirrorExam.shortName} ${mirrorLevel.shortName}`
+              : undefined) ||
+            "Upcoming Exam";
           LocalStorageService.saveTargetExamConfig({
             // Never resurrect or re-clear a date behind the user's back: when
             // preferences carry no date but the active workspace does, keep
