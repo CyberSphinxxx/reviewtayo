@@ -11,6 +11,8 @@ export interface SeedExamLevel {
   id: string;
   examId: string;
   slug: string;
+  /** Track id as used by workspaces/preferences (e.g. "professional"). */
+  trackId: string;
   name: string;
   description: string;
   isDefault: boolean;
@@ -60,6 +62,7 @@ export const SEED_LEVELS: SeedExamLevel[] = [
     id: "level-pro",
     examId: "exam-cse",
     slug: "professional",
+    trackId: "professional",
     name: "Career Service Professional",
     description: "Eligible for second-level and first-level positions in the Philippine Civil Service.",
     isDefault: true,
@@ -68,6 +71,7 @@ export const SEED_LEVELS: SeedExamLevel[] = [
     id: "level-subpro",
     examId: "exam-cse",
     slug: "subprofessional",
+    trackId: "subprofessional",
     name: "Career Service Subprofessional",
     description: "Eligible for first-level (clerical, trades, crafts) positions in the Philippine Civil Service.",
     isDefault: false,

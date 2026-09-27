@@ -3,11 +3,8 @@ import { SEED_LEVELS } from "@/db/seed-data";
 import { prepareExamSession } from "@/features/practice/practice-service";
 import { ExamRunner } from "@/features/practice/ExamRunner";
 
-export function generateStaticParams() {
-  return SEED_LEVELS.map((lvl) => ({
-    level: lvl.slug,
-  }));
-}
+// Per-request question selection — see quick/page.tsx rationale.
+export const dynamic = "force-dynamic";
 
 export default async function MediumTestPage({
   params,
@@ -31,6 +28,8 @@ export default async function MediumTestPage({
       rules={{ ...rules, itemCount: questions.length }}
       title={`${examLevel.name} — Medium Test`}
       subtitle={`${questions.length} questions • 30 minutes • Balanced subtests & detailed analytics`}
+      examLevelId={examLevel.trackId}
+      trackId={examLevel.trackId}
     />
   );
 }

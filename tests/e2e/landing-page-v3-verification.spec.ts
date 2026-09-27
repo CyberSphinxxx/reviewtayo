@@ -25,7 +25,7 @@ test.describe("ReviewTayo Landing Page V3 Verification", () => {
     });
 
     await page.setViewportSize({ width: 1280, height: 850 });
-    await page.goto("http://localhost:3000/");
+    await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
 
     // 1. Header Verification
@@ -190,7 +190,7 @@ test.describe("ReviewTayo Landing Page V3 Verification", () => {
 
   test("verifies mobile layout, responsive wrapping, and hamburger menu", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto("http://localhost:3000/");
+    await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
 
     // Check no horizontal overflow
@@ -203,8 +203,9 @@ test.describe("ReviewTayo Landing Page V3 Verification", () => {
     await expect(burgerBtn).toBeVisible();
     await burgerBtn.click();
 
-    // Verify mobile drawer navigation links
-    const mobileMenu = page.getByRole("navigation", { name: /Mobile navigation/i });
+    // Verify mobile drawer navigation links (homepage uses the global
+    // Header, whose mobile nav is labeled "Primary mobile …")
+    const mobileMenu = page.getByRole("navigation", { name: /mobile/i });
     await expect(mobileMenu).toBeVisible();
     await expect(mobileMenu.getByRole("link", { name: "Exams" })).toBeVisible();
     await expect(mobileMenu.getByRole("link", { name: "Study resources" })).toBeVisible();
@@ -221,7 +222,7 @@ test.describe("ReviewTayo Landing Page V3 Verification", () => {
 
   test("verifies keyboard accessibility and focus navigation", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
-    await page.goto("http://localhost:3000/");
+    await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
 
     // Tab through interactive elements

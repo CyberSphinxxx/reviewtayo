@@ -28,10 +28,10 @@ test.describe("Capture Theme & Reviewers Verification Screenshots", () => {
     const landingLightPath = testInfo.outputPath("landing-hero-light.png");
     await page.screenshot({ path: landingLightPath, fullPage: false });
 
-    // 2. Click "Choose an exam"
-    const chooseBtn = page.getByRole("link", { name: /Choose an exam/i });
-    await expect(chooseBtn).toBeVisible();
-    await chooseBtn.click();
+    // 2. Reach the reviewers page via the global header (hero CTA is now
+    // the guided "Get started" → onboarding entry). Scoped to the header —
+    // the page has several "Exams" links.
+    await page.locator("header").getByRole("link", { name: "Exams", exact: true }).click();
     await page.waitForLoadState("networkidle");
     await expect(page).toHaveURL(/\/reviewers$/);
     await expect(page.getByRole("heading", { level: 1, name: /What are you aiming for\?/i })).toBeVisible();

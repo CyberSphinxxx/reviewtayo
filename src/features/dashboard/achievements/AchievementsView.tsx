@@ -192,7 +192,7 @@ export function AchievementsView() {
                 </p>
               </div>
               <Link
-                href={currentExamConfig?.routes?.quickDrillUrl || "/exams/professional/quick"}
+                href={currentExamConfig?.routes?.quickDrillUrl || "/practice"}
                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#8a1630] text-white text-sm font-extrabold"
               >
                 Take the diagnostic

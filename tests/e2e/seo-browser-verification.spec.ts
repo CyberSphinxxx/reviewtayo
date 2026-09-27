@@ -113,7 +113,7 @@ test.describe("SEO Public Routes & Mobile Readiness Verification", () => {
   for (const route of publicRoutes) {
     test(`Desktop: ${route.path} has valid H1, title, canonical, and Schema`, async ({ page }) => {
       await page.setViewportSize({ width: 1280, height: 800 });
-      await page.goto(`http://localhost:3000${route.path}`, { waitUntil: "domcontentloaded" });
+      await page.goto(route.path, { waitUntil: "domcontentloaded" });
 
       // Title check - must NOT have duplicated brand suffix
       const title = await page.title();
@@ -160,7 +160,7 @@ test.describe("SEO Public Routes & Mobile Readiness Verification", () => {
 
     test(`Mobile (375px): ${route.path} renders cleanly without horizontal scroll or blocked navigation`, async ({ page }) => {
       await page.setViewportSize({ width: 375, height: 667 });
-      await page.goto(`http://localhost:3000${route.path}`, { waitUntil: "load" });
+      await page.goto(route.path, { waitUntil: "load" });
       await page.waitForLoadState("networkidle");
 
       // Ensure no horizontal body overflow
@@ -188,7 +188,7 @@ test.describe("SEO Public Routes & Mobile Readiness Verification", () => {
   }
 
   test("Direct robots.txt request returns canonical sitemap and directives", async ({ request }) => {
-    const res = await request.get("http://localhost:3000/robots.txt");
+    const res = await request.get("/robots.txt");
     expect(res.status()).toBe(200);
     const text = await res.text();
     expect(text).toMatch(/Sitemap: https?:\/\/[^\/]+\/sitemap\.xml/);
@@ -197,7 +197,7 @@ test.describe("SEO Public Routes & Mobile Readiness Verification", () => {
   });
 
   test("Direct sitemap.xml request returns valid XML with public routes", async ({ request }) => {
-    const res = await request.get("http://localhost:3000/sitemap.xml");
+    const res = await request.get("/sitemap.xml");
     expect(res.status()).toBe(200);
     const text = await res.text();
     expect(text).toContain("<urlset");
@@ -207,7 +207,7 @@ test.describe("SEO Public Routes & Mobile Readiness Verification", () => {
   });
 
   test("Direct ads.txt request returns valid policy-compliant response", async ({ request }) => {
-    const res = await request.get("http://localhost:3000/ads.txt");
+    const res = await request.get("/ads.txt");
     expect(res.status()).toBe(200);
     const text = await res.text();
     // Either live publisher record or policy compliance placeholder notice

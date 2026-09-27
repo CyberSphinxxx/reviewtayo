@@ -16,7 +16,9 @@ test.describe("ReviewTayo Homepage Hero Redesign Visual & Responsive Verificatio
     });
   });
 
-  test("verifies desktop hero presentation and captures screenshots across resolutions", async ({ page }) => {
+  test("verifies desktop hero presentation and captures screenshots across resolutions", async ({
+    page,
+  }, testInfo) => {
     const desktopViewports = [
       { name: "1280", width: 1280, height: 800 },
       { name: "1440", width: 1440, height: 900 },
@@ -29,26 +31,28 @@ test.describe("ReviewTayo Homepage Hero Redesign Visual & Responsive Verificatio
       await page.goto("/");
       await page.waitForLoadState("networkidle");
 
-      // Verify masthead
-      await expect(page.getByText(/Philippine Exam Preparation/i).first()).toBeVisible();
-
-      // Verify H1
+      // Hero headline and subheadline
       const h1 = page.getByRole("heading", { level: 1 });
-      await expect(h1).toContainText(/Free practice exams/i);
+      await expect(h1).toContainText(/Review smarter/i);
+      await expect(h1).toContainText(/Pass sooner/i);
+      await expect(
+        page.getByText(/Free timed mock exams for Philippine government/i).first()
+      ).toBeVisible();
 
-      // Verify live CSE contextual action
-      const liveCseLink = page.getByRole("link", { name: /^Open exam/i }).first();
-      await expect(liveCseLink).toBeVisible();
-      await expect(liveCseLink).toHaveAttribute("href", "/cse");
+      // Primary guided entry + secondary sign-in
+      await expect(page.getByRole("link", { name: /Get started/i }).first()).toBeVisible();
+      await expect(page.getByRole("button", { name: /Sign in/i }).first()).toBeVisible();
 
-      // Verify index rows are visible
-      await expect(page.getByRole("heading", { name: /Available now/i })).toBeVisible();
-      await expect(page.getByText("Civil Service Commission (CSC)").first()).toBeVisible();
-      await expect(page.getByRole("heading", { name: "Licensure Examination for Teachers" })).toBeVisible();
+      // Trust strip
+      await expect(page.getByText(/No account needed/i)).toBeVisible();
     }
+
+    await page.screenshot({ path: testInfo.outputPath("hero-desktop-1920.png") });
   });
 
-  test("verifies mobile hero presentation across 375, 390, and 430 widths", async ({ page }) => {
+  test("verifies mobile hero presentation across 375, 390, and 430 widths", async ({
+    page,
+  }) => {
     const mobileViewports = [
       { name: "375", width: 375, height: 667 },
       { name: "390", width: 390, height: 844 },
@@ -65,20 +69,22 @@ test.describe("ReviewTayo Homepage Hero Redesign Visual & Responsive Verificatio
       const clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
       expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
 
-      // Verify long titles wrap without breaking on mobile
-      await expect(page.getByRole("heading", { name: "Licensure Examination for Teachers" })).toBeVisible();
-      await expect(page.getByRole("heading", { name: "Bureau of Fire Protection Examinations" })).toBeVisible();
-
+      // Hero content visible without horizontal scroll
+      const h1 = page.getByRole("heading", { level: 1 });
+      await expect(h1).toBeVisible();
+      await expect(page.getByRole("link", { name: /Get started/i }).first()).toBeVisible();
     }
   });
 
-  test("verifies user interactions: anchor scroll, Sign In modal, and CSE navigation", async ({ page }) => {
+  test("verifies user interactions: Sign In modal, guided entry, and exam browsing", async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/");
     await page.waitForLoadState("networkidle");
 
-    // 1. Sign In modal check
-    const signInBtn = page.getByRole("button", { name: /Sign In/i }).first();
+    // 1. Sign In modal check (header trigger)
+    const signInBtn = page.locator("header").getByRole("button", { name: /Sign In/i }).first();
     await expect(signInBtn).toBeVisible({ timeout: 10000 });
     await signInBtn.click();
     await expect(page.getByRole("heading", { name: /Welcome back/i })).toBeVisible();
@@ -87,15 +93,22 @@ test.describe("ReviewTayo Homepage Hero Redesign Visual & Responsive Verificatio
     await page.keyboard.press("Escape");
     await expect(page.getByRole("heading", { name: /Welcome back/i })).not.toBeVisible();
 
-    // 2. Click CSE link -> navigates to /cse
-    const cseLink = page.getByRole("link", { name: /^Open exam/i }).first();
-    await cseLink.click();
+    // 2. Guided entry: hero "Get started" routes to onboarding
+    const getStarted = page.getByRole("link", { name: /Get started/i }).first();
+    await getStarted.click();
     await page.waitForLoadState("networkidle");
-    await expect(page).toHaveURL(/\/cse$/);
+    await expect(page).toHaveURL(/\/onboarding$/);
+    await expect(
+      page.getByRole("heading", { name: /How would you like to keep your progress/i })
+    ).toBeVisible();
 
-    // Verify CSE page has distinct conversion-oriented level selector card
-    await expect(page.getByRole("heading", { level: 1 })).toContainText(/Philippine Civil Service Exam/i);
-    await expect(page.getByRole("heading", { name: /Choose your exam level/i })).toBeVisible();
-
+    // 3. Exam browsing stays reachable (the focused onboarding canvas has
+    // no global header by design; the header is one step away)
+    await page.goto("/reviewers");
+    await page.waitForLoadState("networkidle");
+    await expect(page).toHaveURL(/\/reviewers$/);
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(
+      /What are you aiming for\?/i
+    );
   });
 });

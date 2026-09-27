@@ -127,7 +127,9 @@ export function StudyPlanView() {
   const examDate = currentWorkspace?.targetExamDate || "";
   const dailyGoal = currentWorkspace?.dailyGoal || preferences.study.dailyGoal || 25;
   const quests = useDailyQuests();
-  const template = preferences.study.planTemplate ?? "smart";
+  // Workspace-scoped plan template (guide §20); falls back to the global
+  // preference for workspaces created before the field existed.
+  const template = currentWorkspace?.studyPlanTemplate ?? preferences.study.planTemplate ?? "smart";
 
   // Level-aware routes and specs derived from the ACTIVE level.
   const levelRoutes = useMemo(
@@ -239,6 +241,12 @@ export function StudyPlanView() {
 
   const setTemplate = (id: PlanTemplateId) => {
     if (id !== template) {
+      // The template belongs to the active workspace so two exams can keep
+      // different strategies (guide §20). The preferences copy is still
+      // written as a legacy fallback for workspaces without the field.
+      if (currentWorkspace) {
+        WorkspaceService.updateWorkspace(currentWorkspace.id, { studyPlanTemplate: id });
+      }
       updateCategory("study", { planTemplate: id });
     }
   };

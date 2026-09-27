@@ -58,6 +58,7 @@ test.describe("ReviewTayo Multi-Exam Platform Accessibility & Responsive Verific
       await page.keyboard.press("Tab");
       const activeText = await page.evaluate(() => document.activeElement?.textContent?.trim() || "");
       if (
+        activeText.includes("Get started") ||
         activeText.includes("Start free diagnostic") ||
         activeText.includes("Open exam")
       ) {
@@ -108,13 +109,16 @@ test.describe("ReviewTayo Multi-Exam Platform Accessibility & Responsive Verific
     const h1 = page.locator("h1");
     await expect(h1).toBeVisible();
 
-    // Verify primary action remains clickable and visible
-    const cseBtn = page.getByRole("link", { name: /Start free diagnostic/i });
+    // Verify primary action remains clickable and visible (hero CTA is the
+    // guided "Get started" entry in the current UX)
+    const cseBtn = page.getByRole("link", { name: /Get started/i }).first();
     await expect(cseBtn).toBeVisible();
     await expect(cseBtn).toBeEnabled();
 
-    // Verify available now section is visible and readable
-    await expect(page.getByRole("heading", { name: /Start With a Live Reviewer/i })).toBeVisible();
+    // Verify a below-fold section heading remains visible and readable
+    await expect(
+      page.getByRole("heading", { name: /Try a real question/i })
+    ).toBeVisible();
   });
 
   test("Reduced motion preference disables/minimizes transitions", async ({ page }) => {

@@ -113,15 +113,16 @@ export function ExamSubNav({
     }
   };
 
-  // Sub-nav link definitions
-  const overviewHref = "/cse";
+  // Sub-nav link definitions — derived from the exam's own config, never a
+  // hardcoded CSE path (guide §15).
+  const overviewHref = examConfig?.href || "/cse";
   const levelRoutes = getExamRoutesForLevel(examId, activeLevelSlug);
   const practiceHref = levelRoutes.practiceUrl || "/practice";
-  const mockHref = levelRoutes.fullMockUrl || "/exams/professional/full";
+  const mockHref = levelRoutes.fullMockUrl || "/practice";
   const guidesHref = "/guides";
   const infoHref = examConfig?.routes?.infoUrl || "/cse/exam-guide";
 
-  const isOverview = pathname === "/cse";
+  const isOverview = pathname === overviewHref;
   const isPractice = pathname === "/practice" || Boolean(pathname?.startsWith("/practice/"));
   const isMock = pathname === "/exams" || Boolean(pathname?.startsWith("/exams/"));
   const isGuides = pathname === "/guides" || Boolean(pathname?.startsWith("/guides/"));

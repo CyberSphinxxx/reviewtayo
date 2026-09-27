@@ -21,21 +21,19 @@ test.describe("Civil Service Exam Reviewer E2E Flows", () => {
     await page.goto("/");
     await expect(page).toHaveTitle(/Philippine Exam Reviewer & Mock Tests/i);
 
-    // Verify umbrella proposition and heading
-    await expect(page.getByText(/Philippine exam preparation/i).first()).toBeVisible();
-    await expect(page.getByRole("heading", { level: 1 })).toContainText(/Free practice exams/i);
+    // Verify the current hero proposition and guided entry
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(/Review smarter/i);
+    await expect(page.getByText(/Free timed mock exams for Philippine government/i).first()).toBeVisible();
 
-    // Verify Reviewers catalog section
-    await expect(page.getByRole("heading", { name: /Available now/i })).toBeVisible();
+    // Verify Reviewers catalog section on the page
     await expect(page.getByText("Live").first()).toBeVisible();
     await expect(page.getByText(/Coming soon/i).first()).toBeVisible();
 
-    // Click primary CTA to enter CSE reviewer
-    const startCseBtn = page.getByRole("link", { name: /^Open exam/i }).first();
-    await expect(startCseBtn).toBeVisible();
-    await startCseBtn.click();
-    await expect(page).toHaveURL(/\/cse$/);
-    await expect(page.getByRole("heading", { level: 1 })).toContainText(/Philippine Civil Service Exam/i);
+    // Click primary CTA to enter the guided onboarding
+    const getStarted = page.getByRole("link", { name: /Get started/i }).first();
+    await expect(getStarted).toBeVisible();
+    await getStarted.click();
+    await expect(page).toHaveURL(/\/onboarding$/);
   });
 
   test("loads landing page with exam preparation options", async ({ page }) => {
@@ -127,8 +125,13 @@ test.describe("Civil Service Exam Reviewer E2E Flows", () => {
     await page.goto("/cse");
     await page.waitForLoadState("networkidle");
 
-    // The hero panel owl: ReviewTayoOwl with tracked pupils
-    const panelOwl = page.locator("svg").filter({ has: page.locator("g.pupil") }).first();
+    // The hero panel owl: ReviewTayoOwl with tracked pupils. Scoped to the
+    // start panel — the header logo owl also has pupils but is not tracked.
+    const panelOwl = page
+      .locator("div.max-w-sm")
+      .locator("svg")
+      .filter({ has: page.locator("g.pupil") })
+      .first();
     await expect(panelOwl).toBeVisible();
 
     // Both pupils exist
@@ -146,10 +149,14 @@ test.describe("Civil Service Exam Reviewer E2E Flows", () => {
     await proRadio.click();
     await expect(ctaBtn).toHaveAttribute("href", "/exams/professional/quick");
 
-    // Move pointer near panel and verify pupil movement
+    // Move pointer near panel and verify pupil movement (the owl component
+    // tracks the cursor via inline transform; a wider sweep guarantees the
+    // pointer actually crosses the 280px tracking radius)
     const panelBox = await page.getByRole("heading", { name: "Start your review" }).boundingBox();
     if (panelBox) {
-      await page.mouse.move(panelBox.x + panelBox.width / 2, panelBox.y + panelBox.height / 2);
+      await page.mouse.move(panelBox.x + panelBox.width / 2 + 200, panelBox.y + panelBox.height / 2);
+      await page.waitForTimeout(100);
+      await page.mouse.move(panelBox.x + panelBox.width / 2, panelBox.y + panelBox.height / 2 + 40);
       await page.waitForTimeout(100);
       const transform = await leftPupil.getAttribute("style");
       expect(transform).toMatch(/translate/);
@@ -274,13 +281,9 @@ test.describe("Civil Service Exam Reviewer E2E Flows", () => {
     const bookmarkBtn = page.getByTitle("Bookmark Question").first();
     await bookmarkBtn.click();
 
-    // Navigate to dashboard
-    await page.goto("/dashboard");
-    await page.getByRole("button", { name: /Start preparing/i }).click();
-    await expect(page.getByText("Your Progress is Saved Locally")).toBeVisible();
-    await expect(page.getByText("Export Backup (JSON)")).toBeVisible();
-
-    // Check Bookmarks page
+    // Verify the bookmark landed on the bookmarks page (the workspace-gated
+    // dashboard shows the exam chooser after this fresh guest run; the
+    // bookmark is still on the dedicated page)
     await page.goto("/dashboard/bookmarks");
     await expect(page.getByRole("button", { name: /Practice Bookmarks/i })).toBeVisible();
   });
@@ -335,30 +338,30 @@ test.describe("Civil Service Exam Reviewer E2E Flows", () => {
   });
 
   test("displays target exam countdown on dashboard and supports Leitner SRS filters in mistake bank", async ({ page }) => {
-    // 1. Choose an exam workspace, then check Dashboard Header, Footer & Target Exam Countdown
+    // 1. Choose an exam workspace, then verify the workspace dashboard shows
+    //    the target countdown and daily goal (the dashboard shell uses a
+    //    sidebar layout, not the old page banner/header roles)
     await page.goto("/dashboard");
-    await expect(page.getByRole("banner")).toBeVisible();
-    await expect(page.getByRole("link", { name: "My dashboard", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Sign In" })).toBeVisible();
-    await expect(page.getByRole("contentinfo")).toBeVisible();
-
-    await expect(page.getByRole("heading", { name: /Choose one exam to build your workspace/i })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /Choose one exam to build your workspace/i })
+    ).toBeVisible();
     await page.getByRole("button", { name: /Start preparing/i }).click();
 
-    await expect(page.getByText("Target Exam Pacing")).toBeVisible();
-    await expect(page.getByText(/Remaining/i)).toBeVisible();
-    await expect(page.getByText(/Daily Goal/i)).toBeVisible();
+    // The workspace dashboard surfaces the countdown via the target card and
+    // the daily-goal block ("Target Exam Pacing" was the old section label).
+    await expect(page.getByText(/Daily goal/i).first()).toBeVisible();
+    await expect(page.getByText(/days/i).first()).toBeVisible();
 
-    // 2. Open Mistake Bank and verify persistent navigation
+    // 2. Open Mistake Bank and verify the workspace view
     await page.goto("/dashboard/mistakes");
-    await expect(page.getByRole("banner")).toBeVisible();
     await expect(page.getByText("Leitner SRS")).toBeVisible();
     await expect(page.getByText("Your Mistake Bank is empty!")).toBeVisible();
   });
 
   test("opens Sign In modal from header and confirms it is in-bounds and centered in viewport", async ({ page }) => {
     await page.goto("/");
-    const signInBtn = page.getByRole("button", { name: "Sign In" });
+    // Scoped to the header: the hero has a lowercase "Sign in" button too.
+    const signInBtn = page.locator("header").getByRole("button", { name: "Sign In" });
     await expect(signInBtn).toBeVisible();
     await signInBtn.click();
 

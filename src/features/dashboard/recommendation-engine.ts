@@ -1,4 +1,5 @@
 import type { AttemptSummary, StoredMistakeItem } from "@/lib/storage";
+import { getFeaturedExam } from "@/config/exams";
 
 export interface SubtestAccuracySummary {
   name: string;
@@ -40,13 +41,17 @@ export function getNextBestStepRecommendation(
   subtestAccuracies?: SubtestAccuracySummary[],
   context?: ExamRecommendationContext
 ): NextBestStepRecommendation {
-  const examName = context?.examShortName || "Civil Service";
-  const quickHref = context?.quickDrillHref || "/exams/professional/quick";
-  const fullMockHref = context?.fullMockHref || "/exams/professional/full";
+  // Defaults come from the exam registry (the featured catalog entry), never
+  // from hardcoded CSE literals (guide §5/§10). Callers with an active
+  // workspace always pass explicit context; this is only a safety net.
+  const featured = getFeaturedExam();
+  const examName = context?.examShortName || featured?.shortName || "ReviewTayo";
+  const quickHref = context?.quickDrillHref || featured?.routes?.quickDrillUrl || "/practice";
+  const fullMockHref = context?.fullMockHref || featured?.routes?.fullMockUrl || "/practice";
   const practiceHref = context?.practiceHref || "/practice";
-  const mockItems = context?.fullMockItems || 170;
-  const mockMinutes = context?.fullMockMinutes || 190;
-  const passingTarget = context?.passingTarget || 80;
+  const mockItems = context?.fullMockItems || featured?.mockSpecs?.itemCount || 0;
+  const mockMinutes = context?.fullMockMinutes || featured?.mockSpecs?.timeLimitMinutes || 0;
+  const passingTarget = context?.passingTarget || featured?.mockSpecs?.passingScorePercentage || 80;
 
   const mockDurationStr =
     mockMinutes >= 60

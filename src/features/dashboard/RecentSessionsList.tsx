@@ -87,7 +87,7 @@ export function RecentSessionsList({ history }: RecentSessionsListProps) {
         <div className="text-center py-6 text-slate-500 space-y-2">
           <p className="text-xs font-medium">No test sessions recorded yet.</p>
           <Link
-            href="/exams/professional/quick"
+            href="/practice"
             className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-700 hover:text-brand-800"
           >
             <span>Take your first 10-question diagnostic</span>

@@ -24,11 +24,14 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { QuestionReportModal } from "@/features/practice/QuestionReportModal";
+import { getExamRunnerRouteForMode } from "@/config/exams";
 import { useSession } from "@/lib/auth/auth-client";
 
 export interface AttemptData {
   id: string;
   title: string;
+  /** Explicit exam identity (guide §22); absent on legacy attempts. */
+  examLevelId?: string;
   mode: string;
   questions: EngineQuestion[];
   answers: UserAnswerState[];
@@ -43,6 +46,14 @@ interface ResultsViewProps {
 export function ResultsView({ attemptData }: ResultsViewProps) {
   const { title, mode, questions, answers, scoreResult } = attemptData;
   const { data: session } = useSession();
+
+  // Retake route derives from the attempt's explicit exam identity (guide
+  // §24) — never a hardcoded CSE path. Attempts recorded before identity was
+  // tracked have no retake route; they get the neutral practice hub instead.
+  const attemptLevelId = attemptData.examLevelId;
+  const retakeHref = attemptLevelId
+    ? getExamRunnerRouteForMode("cse", attemptLevelId, mode)
+    : undefined;
 
   const [filter, setFilter] = useState<"all" | "incorrect" | "correct" | "flagged">("all");
   const [expandedQuestionIds, setExpandedQuestionIds] = useState<Set<string>>(new Set());
@@ -343,12 +354,12 @@ export function ResultsView({ attemptData }: ResultsViewProps) {
         <div className="flex flex-wrap gap-4 justify-between items-center pt-2 print:hidden">
           <div className="flex flex-wrap gap-3">
             <Link
-              href={`/exams/professional/${mode}`}
+              href={retakeHref ?? "/practice"}
               prefetch={true}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-700 hover:bg-brand-800 text-white font-bold text-sm shadow transition"
             >
               <RotateCcw className="w-4 h-4" />
-              <span>Retake {title}</span>
+              <span>{retakeHref ? `Retake ${title}` : "Back to practice"}</span>
             </Link>
             <button
               type="button"

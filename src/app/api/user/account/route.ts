@@ -36,6 +36,7 @@ export async function GET(request: Request) {
     // Fetch user cloud records
     let userAttempts: unknown[] = [];
     let userBookmarks: unknown[] = [];
+    const warnings: string[] = [];
 
     try {
       userAttempts = await db
@@ -43,6 +44,8 @@ export async function GET(request: Request) {
         .from(testAttempts)
         .where(eq(testAttempts.userId, userId));
     } catch (err) {
+      // A privacy export must not silently omit data: surface the gap.
+      warnings.push("Attempts could not be read from the cloud database and may be missing from this export.");
       console.warn("[AccountAPI] Could not fetch attempts:", err);
     }
 
@@ -52,6 +55,7 @@ export async function GET(request: Request) {
         .from(bookmarks)
         .where(eq(bookmarks.userId, userId));
     } catch (err) {
+      warnings.push("Bookmarks could not be read from the cloud database and may be missing from this export.");
       console.warn("[AccountAPI] Could not fetch bookmarks:", err);
     }
 
@@ -72,6 +76,7 @@ export async function GET(request: Request) {
         attempts: userAttempts,
         bookmarks: userBookmarks,
       },
+      warnings,
     });
   } catch (error) {
     console.error("[AccountAPI] Error exporting account data:", error);
@@ -104,19 +109,24 @@ export async function DELETE(request: Request) {
 
     const userId = session.user.id;
 
-    // Perform permanent erasure of user records and related cloud data
+    // Perform permanent erasure of user records and related cloud data.
+    // RA 10173 erasure must be all-or-nothing: a single transaction so a
+    // mid-sequence failure rolls back every delete (the 500 message below —
+    // "Account data was not deleted" — is then actually true).
     try {
-      // 1. Delete bookmarks
-      await db.delete(bookmarks).where(eq(bookmarks.userId, userId));
-      // 2. Delete user progress
-      await db.delete(userProgress).where(eq(userProgress.userId, userId));
-      // 3. Delete test attempts (cascades userAnswers in DB schema)
-      await db.delete(testAttempts).where(eq(testAttempts.userId, userId));
-      // 4. Delete sessions and accounts
-      await db.delete(sessions).where(eq(sessions.userId, userId));
-      await db.delete(accounts).where(eq(accounts.userId, userId));
-      // 5. Delete user record
-      await db.delete(users).where(eq(users.id, userId));
+      await db.transaction(async (tx) => {
+        // 1. Delete bookmarks
+        await tx.delete(bookmarks).where(eq(bookmarks.userId, userId));
+        // 2. Delete user progress
+        await tx.delete(userProgress).where(eq(userProgress.userId, userId));
+        // 3. Delete test attempts (cascades userAnswers in DB schema)
+        await tx.delete(testAttempts).where(eq(testAttempts.userId, userId));
+        // 4. Delete sessions and accounts
+        await tx.delete(sessions).where(eq(sessions.userId, userId));
+        await tx.delete(accounts).where(eq(accounts.userId, userId));
+        // 5. Delete user record
+        await tx.delete(users).where(eq(users.id, userId));
+      });
     } catch (dbErr) {
       console.error("[AccountAPI] DB erasure failed:", dbErr);
       return NextResponse.json(

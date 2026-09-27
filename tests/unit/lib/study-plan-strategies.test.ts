@@ -31,7 +31,7 @@ describe("strategy divergence (P3)", () => {
     for (const t of PLAN_TEMPLATES) {
       weeks.set(t.id, activeFocuses(t.id));
     }
-    const unique = new Set(weeks.values().map((f) => f.join("|")));
+    const unique = new Set(Array.from(weeks.values()).map((f) => f.join("|")));
     expect(unique.size).toBe(PLAN_TEMPLATES.length);
   });
 

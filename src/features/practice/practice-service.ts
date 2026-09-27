@@ -72,7 +72,7 @@ export function getTopicQuestions(topicId: string): EngineQuestion[] {
 }
 
 export function prepareExamSession(
-  levelSlug: string,
+  levelSlug: string | undefined,
   mode: ExamMode,
   options?: {
     topicId?: string;
@@ -80,7 +80,20 @@ export function prepareExamSession(
     questionLimit?: number;
   }
 ): { session: ExamSessionState; questions: EngineQuestion[]; rules: ExamRuleConfig } {
-  const level = SEED_LEVELS.find((l) => l.slug === levelSlug) || SEED_LEVELS[0];
+  // An unknown level must fail loudly (guide §5/§14): silently serving CSE's
+  // question pool for an unresolvable level is exactly how cross-exam
+  // contamination starts. Only an omitted slug (legacy call sites) resolves
+  // to the default level.
+  if (levelSlug === undefined) {
+    if (SEED_LEVELS.length === 0) {
+      throw new Error(`No exam levels are registered; cannot prepare a session.`);
+    }
+    levelSlug = SEED_LEVELS[0].slug;
+  }
+  const level = SEED_LEVELS.find((l) => l.slug === levelSlug);
+  if (!level) {
+    throw new Error(`Unknown exam level "${levelSlug}" — no question pool exists for it.`);
+  }
 
   // Scope the candidate pool to the requested exam level: only questions
   // whose topic belongs to one of this level's subjects are eligible. This

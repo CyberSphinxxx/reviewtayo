@@ -264,6 +264,24 @@ body {
   animation: bob 4.6s ease-in-out infinite;
 }
 
+/* Onboarding step transition — slide/fade within the 150–250ms budget from
+   docs/onboarding-handoff/ONBOARDING_PLAN.md. The global reduced-motion
+   rules above collapse this to ~0ms automatically. */
+.animate-onboarding-step {
+  animation: onboarding-step-in 200ms ease-out;
+}
+
+@keyframes onboarding-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes blink {
   0%, 93%, 100% { transform: scaleY(1); }
   96% { transform: scaleY(0.08); }
