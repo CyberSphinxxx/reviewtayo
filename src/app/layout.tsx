@@ -1,5 +1,23 @@
 import type { Metadata } from "next";
+import { Bricolage_Grotesque, Figtree } from "next/font/google";
 import "./globals.css";
+
+// Self-hosted via next/font: fonts ship with the build and load with
+// `display: swap` + a size-adjusted fallback, so headings stop shifting
+// width when the webfont arrives (the exam-target width flicker). The CSS
+// helpers in globals.css consume these variables.
+const bricolage = Bricolage_Grotesque({
+  subsets: ["latin"],
+  weight: ["500", "800"],
+  variable: "--font-display",
+  display: "swap",
+});
+const figtree = Figtree({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-body",
+  display: "swap",
+});
 import { getCanonicalUrl } from "@/lib/env";
 import { CookieConsentBanner } from "@/components/privacy/CookieConsentBanner";
 import { AdSenseScript } from "@/components/ads/AdSenseScript";
@@ -84,14 +102,12 @@ export default function RootLayout({
   };
 
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={`${bricolage.variable} ${figtree.variable}`}>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="theme-color" content="#faf8f7" media="(prefers-color-scheme: light)" />
         <meta name="theme-color" content="#161315" media="(prefers-color-scheme: dark)" />
         <meta name="mobile-web-app-capable" content="yes" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://pagead2.googlesyndication.com" />
         {/* Google Consent Mode v2 default initialization (ADS-04, ADS-05) */}
         <script
