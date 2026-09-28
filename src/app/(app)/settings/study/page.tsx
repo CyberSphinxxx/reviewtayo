@@ -14,6 +14,7 @@ import {
   NEXT_UPCOMING_EXAM_DATE,
 } from "@/lib/exam-guide/csc-data";
 import { WorkspaceService } from "@/lib/workspace/workspace-service";
+import { DatePicker } from "@/components/ui/DatePicker";
 import {
   Check,
   AlertCircle,
@@ -326,14 +327,14 @@ export default function StudyPlanSettingsPage() {
               </span>
               {targetDateType === "custom" && (
                 <div className="mt-3">
-                  <input
-                    type="date"
+                  <DatePicker
+                    ariaLabel="Custom target exam date"
                     value={customDate}
-                    onChange={(e) => {
-                      setCustomDate(e.target.value);
+                    min={new Date().toISOString().slice(0, 10)}
+                    onChange={(iso) => {
+                      setCustomDate(iso);
                       setIsDirty(true);
                     }}
-                    className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-semibold focus:ring-2 focus:ring-brand-500"
                   />
                 </div>
               )}
