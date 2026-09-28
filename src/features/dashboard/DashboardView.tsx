@@ -32,9 +32,9 @@ const TILE =
 const LABEL = "block text-[11px] font-extrabold uppercase tracking-[0.08em] text-[#8a7a80] dark:text-[#a89ba1]";
 const LINK = "text-[13px] font-extrabold text-[#8a1630] dark:text-[#de5572] hover:underline inline-flex items-center gap-1";
 
-function sectionHeader(title: string, href: string, linkLabel: string) {
+function sectionHeader(title: string, href: string, linkLabel: string, intro?: string) {
   return (
-    <div className="flex items-center justify-between gap-3 mb-3">
+    <div className="flex items-center justify-between gap-3 mb-1">
       <h2 className="font-display text-lg font-extrabold tracking-[-0.02em] text-[#1b1216] dark:text-[#f8ecee]">
         {title}
       </h2>
@@ -43,6 +43,15 @@ function sectionHeader(title: string, href: string, linkLabel: string) {
         <ArrowRight className="w-3.5 h-3.5" />
       </Link>
     </div>
+    // `intro` renders directly below via the caller so the header keeps one
+    // row height without negative-margin hacks.
+  );
+}
+
+/** Small intro line that sits directly under a section header. */
+function sectionIntro(text: string) {
+  return (
+    <p className="text-xs font-semibold text-[#8a7a80] dark:text-[#a89ba1] mb-3">{text}</p>
   );
 }
 
@@ -122,7 +131,7 @@ function TiltOwl() {
 }
 
 export function DashboardView() {
-  const { preferences, mounted } = usePreferences();
+  const { preferences } = usePreferences();
   const { currentWorkspace, currentExamConfig, isLoaded } = useExamWorkspace();
 
   const [history, setHistory] = useState<AttemptSummary[]>([]);
@@ -130,6 +139,7 @@ export function DashboardView() {
   const [allMistakeItems, setAllMistakeItems] = useState<StoredMistakeItem[]>([]);
   const [bookmarkCount, setBookmarkCount] = useState(0);
   const [streakDays, setStreakDays] = useState(0);
+  const [longestStreak, setLongestStreak] = useState(0);
   const [subjects, setSubjects] = useState<SubjectReadinessMetric[]>([]);
   const [dailyAnswered, setDailyAnswered] = useState(0);
   const [weekCells, setWeekCells] = useState<DailyActivityCell[]>([]);
@@ -145,6 +155,7 @@ export function DashboardView() {
       setDueMistakeItems(LocalStorageService.getDueMistakes(wsId));
       setBookmarkCount(LocalStorageService.getBookmarks(wsId).length);
       setStreakDays(LocalStorageService.getStudyStreak().currentStreak);
+      setLongestStreak(LocalStorageService.getStudyStreak().longestStreak);
       setSubjects(LocalStorageService.getSubjectReadiness(wsId));
       setDailyAnswered(LocalStorageService.getDailyQuestionsAnswered());
       setWeekCells(LocalStorageService.getActivityGridData(1));
@@ -259,7 +270,9 @@ export function DashboardView() {
 
   const goalPct = dailyGoal > 0 ? Math.min(1, dailyAnswered / dailyGoal) : 0;
   const ringCirc = 2 * Math.PI * 34;
-  const greeting = mounted ? "Welcome back" : "Your study command center";
+  // SSR-stable greeting: no mounted flip, so the first paint matches hydration
+  // (part of the flicker fix — the old text swapped a beat after load).
+  const greeting = "Welcome back";
 
   return (
     <div className="animate-page-enter space-y-5">
@@ -342,7 +355,7 @@ export function DashboardView() {
         <div className={`${TILE} min-h-[150px] flex flex-col justify-between`}>
           <span className={LABEL}>Practice accuracy</span>
           <div>
-            <b className="block font-display text-4xl font-extrabold tracking-[-0.04em] text-[#8a1630] dark:text-[#de5572]">
+            <b className="block font-display text-4xl font-extrabold tracking-[-0.04em] text-[#8a1630] dark:text-[#de5572] tabular-nums">
               {avgAccuracy !== null ? `${avgAccuracy}%` : "—"}
             </b>
             <div className="h-2 rounded-full bg-[#f4e7e9] dark:bg-white/10 mt-2 overflow-hidden">
@@ -413,7 +426,7 @@ export function DashboardView() {
         <div className={`${TILE} min-h-[150px] flex flex-col justify-between`}>
           <span className={LABEL}>Items answered</span>
           <div>
-            <b className="block font-display text-4xl font-extrabold tracking-[-0.04em]">
+            <b className="block font-display text-4xl font-extrabold tracking-[-0.04em] tabular-nums">
               {itemsAnswered}
             </b>
             <small className="block text-xs font-semibold text-[#8a7a80] dark:text-[#a89ba1] mt-1">
@@ -481,9 +494,7 @@ export function DashboardView() {
         {/* Subject progress */}
         <section className={TILE} aria-label="Subject progress">
           {sectionHeader("Your subject progress", currentExamConfig?.routes?.practiceUrl || "/practice", "All topics")}
-          <p className="text-xs font-semibold text-[#8a7a80] dark:text-[#a89ba1] mt-[-6px] mb-3">
-            Accuracy from your sessions. Target {TARGET_ACCURACY}%.
-          </p>
+          {sectionIntro(`Accuracy from your sessions. Target ${TARGET_ACCURACY}%.`)}
           {subjects.length === 0 ? (
             <p className="text-sm font-semibold text-[#8a7a80] dark:text-[#a89ba1] py-4">
               No subjects configured yet.
@@ -575,12 +586,11 @@ export function DashboardView() {
       <div className="grid lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] gap-4 items-start">
         <section className={TILE} aria-label="Consistency">
           {sectionHeader("Consistency", "/dashboard/history", "Details")}
-          <p className="text-xs font-semibold text-[#8a7a80] dark:text-[#a89ba1] mt-[-6px] mb-3">
-            {weekCells.filter((c) => c.questionCount > 0 || c.hasCheckIn).length} active{" "}
-            {weekCells.filter((c) => c.questionCount > 0 || c.hasCheckIn).length === 1 ? "day" : "days"} this week ·
-            Longest streak {LocalStorageService.getStudyStreak().longestStreak}{" "}
-            {LocalStorageService.getStudyStreak().longestStreak === 1 ? "day" : "days"}
-          </p>
+          {sectionIntro(
+            `${weekCells.filter((c) => c.questionCount > 0 || c.hasCheckIn).length} active ${
+              weekCells.filter((c) => c.questionCount > 0 || c.hasCheckIn).length === 1 ? "day" : "days"
+            } this week · Longest streak ${longestStreak} ${longestStreak === 1 ? "day" : "days"}`
+          )}
           <div
             className="grid grid-flow-col grid-rows-7 gap-[5px] overflow-x-auto pb-1"
             role="img"
