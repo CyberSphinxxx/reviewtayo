@@ -1,5 +1,3 @@
-@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Figtree:wght@400;500;600;700;800&display=swap");
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -229,13 +227,16 @@ body {
 /* ReviewTayo Landing V3 Design Styles & Animations                          */
 /* ========================================================================= */
 
+/* Font families are injected by next/font in src/app/layout.tsx as CSS
+   variables (--font-display / --font-body); these helpers consume them so
+   text no longer reflows when the webfont arrives after first paint. */
 .font-display {
-  font-family: "Bricolage Grotesque", Figtree, system-ui, sans-serif;
+  font-family: var(--font-display, "Bricolage Grotesque"), Figtree, system-ui, sans-serif;
   letter-spacing: -0.035em;
 }
 
 .font-body {
-  font-family: Figtree, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--font-body, Figtree), system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 .font-logo {
