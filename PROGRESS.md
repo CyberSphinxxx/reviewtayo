@@ -2,9 +2,42 @@
 
 Full prior status is archived in `ARCHIVES/progress-history.md`.
 
-**Current status: PROJECT AUDIT — 6 CONFIRMED FINDINGS FIXED (VERIFY EXIT 0 — 84 FILES / 586 TESTS; E2E 81 PASSED / 2 SKIPPED)**
+**Current status: QA & PRODUCT UPDATE — ALL 9 WORK ITEMS DONE (VERIFY EXIT 0 — 86 FILES / 608 TESTS; E2E 91 PASSED / 2 SKIPPED / 0 FAILED)**
 
-## Audit round (latest)
+## QA & product update round (latest)
+
+The nine work items from the QA mission, each with its root cause, fix, tests, and browser evidence below. Plan and verification approach in `implementation_plan.md` ("QA & product update" section).
+
+**Fixed (each pinned by a behavior test)**
+
+- **WI-1 Quick Drill 404** — PracticeHubView embedded the `{level}` route template verbatim, so Quick drill launched `/exams/{level}/quick` → 404. Added `resolveRunnerLevelSlug()` + `getPracticeModeHrefForLevel()` in `src/config/practice-modes.ts` (handles "professional"/"subprofessional"/"cse-professional"/legacy "track-pro"/"track-subpro"), used by PracticeHubView resolveHref/openSetup; invalid levels render a new in-app `ExamLevelUnavailable` state (recovery links, no bare 404) wired into all three runner pages in place of `notFound()`. Tests: `tests/e2e/practice-hub-quick-drill.spec.ts` (7), `tests/unit/dashboard/practice-sheet.test.tsx`, `tests/unit/config/practice-modes.test.ts`.
+- **WI-2 Practice answer gate** — study-mode runners let learners flip through with explanations gated only behind Next, so the explanation leaked before committing. ExamRunner practice flow now: "Answer" (disabled until a choice is selected, hint `#practice-answer-hint`), commit locks all choices, verdict (`role="status"`) + owl explanation appear only after commit, then "Next". Exam mode unchanged (no verdict, quiet chrome). Tests: `tests/e2e/practice-answer-gate.spec.ts`, `tests/unit/practice/ExamRunner.test.tsx` (26).
+- **WI-3 Runner spacing/reflow** — ExamRunner card padding, choice list, and nav spacing tightened; CoachPanel owl stage 190→132px, tighter paddings; question heading gets a ref + focus after navigation (skips when fully visible, respects reduced-motion). Pinned by ExamRunner unit tests; fit verified live at 1280×800, 1440×900, 390×844 (no horizontal scroll).
+- **WI-4 Dashboard flicker** — DashboardView greeted with a mounted-flip ("Good evening" → "Welcome back") and computed longestStreak during render. Now a stable "Welcome back", `longestStreak` measured in an effect, sectionIntro() replaces negative-margin overlap, tabular-nums on KPI numbers. Tests: `tests/unit/dashboard/` (58 across the suite).
+- **WI-5 About page + branding** — `/about` rewritten (why/who/how, what's live CSE-only, planned-not-live list, multi-exam framing, non-affiliation note); "CSE Reviewer PH" → "ReviewTayo" in csc-domain disclaimers, exam-guide sections, AuthForm/AuthStandaloneForm. Pinned by content tests + updated SEO e2e pins.
+- **WI-6 FAQ** — FAQ types extended with general categories (`FAQ_GENERAL_CATEGORIES`), 11 honest general entries, /faq rebuilt (general first, per-exam groups CSE-first, CSC-verified badge on exam-only categories, accessible accordion h3>button aria-expanded/aria-controls + role=region, "Other exams" placeholder without fabricated Q&A, search across both). Tests: `tests/unit/content/faq-structure.test.ts` (14).
+- **WI-7 Dashboard chrome/fonts** — AppShell skeleton target-card rule fixed (gated test now passes), streak/daily-goal "—" until measured (no effect→render flicker); Google Fonts CSS @import removed from globals.css, next/font (Bricolage Grotesque 500/800, Figtree 400–800) in layout.tsx, vestigial fonts.googleapis preconnects removed — zero Google-Fonts network dependency. Tests: dashboard + gated regression tests.
+- **WI-8 DatePicker** — study-period, onboarding exam-date, and custom-target-date native `<input type=date>` replaced with a new `src/components/ui/DatePicker.tsx` (grid popover, min/max clamping, full keyboard map, focus return, aria grid semantics, YYYY-MM-DD contract). Fixed two real bugs found by its tests: civil-date parsing (parseManilaDate midnight ≠ UTC day) and mixed timestamp-space month-boundary compares. Tests: `tests/unit/ui/date-picker.test.tsx` (8).
+- **WI-9 Streak chip** — CoachPanel hides the streak chip at streak 0 (panel + compact), shows "Streak ×N" from the first correct answer. Pinned by CoachPanel unit tests.
+
+**Browser evidence (production build, port 3457, Chromium)**
+
+- **WI-1**: dashboard practice → Quick drill → Exam mode → Start → `/exams/professional/quick?feedback=exam`, timer running, no `{level}` in URL.
+- **WI-2**: `/practice/top-pro-grammar` — Answer disabled pre-selection with hint; commit locks choices; "Correct. Nicely done." via role=status + owl explanation + "Streak ×1 🔥"; button becomes Next. Streak chip absent at 0 (WI-9) in the same snapshot.
+- **WI-3**: quick runner + topic practice fit 1280×800, 1440×900, 390×844 with no horizontal scroll (scrollWidth == clientWidth checked live).
+- **WI-4/WI-7**: dashboard at 1440×900 — stable "Welcome back", measured "Longest streak 2 days", tabular-nums, daily-goal "—" placeholder, Bricolage Grotesque computed on .font-display, no fonts.googleapis resource on the page.
+- **WI-5**: /about renders owl + full narrative; CSE-only honesty, planned list, non-affiliation text confirmed.
+- **WI-6**: /faq — 21 accordion entries, first opens (aria-expanded true + region visible), search filters, badges + "Other exams" present.
+- **WI-8**: settings/study custom target — picker opens on the value month (Mar 2027, day 14 focused+selected), ArrowRight+Enter commits Mar 15, 2027, dialog closes, Save enables.
+
+**Verification (actual results)**
+
+- `npm run verify`: **exit 0** — typecheck clean, ESLint clean, architecture guard PASS, Vitest **86 files / 608 tests**, production build clean.
+- `PORT=3457 npm run test:e2e`: **91 passed / 2 skipped (pre-existing deprecated visual suite) / 0 failed** against the production build.
+- Test additions this round: practice-hub e2e (7), practice answer-gate e2e, faq-structure (14), date-picker (8), updated ExamRunner/SEO pins; `tests/setup.ts` mocks next/font.
+- Fixed during verification: my new e2e specs initially assumed an onboarded profile (hub locked for fresh contexts) — seeded completed CSE-professional onboarding like the existing onboarding spec; SEO spec's /about + /faq title/H1 pins updated to the intentionally rewritten pages (schema/canonical assertions untouched, still pass).
+
+## Project audit round (prior)
 
 Full project audit (bugs, inefficiencies, scalability) — plan, findings, and non-findings in `implementation_plan.md` ("Project audit" section). Six confirmed findings, all fixed, all pinned by tests, all verified against the production build.
 
@@ -62,4 +95,4 @@ Implemented the 8-step onboarding flow per `docs/onboarding-handoff/ONBOARDING_P
 - From the external audit (unchanged): A02 full deadline recovery, A04 sync idempotency (sync is now honest but client retry dedupe is still open), A05 publication lifecycle, A13 real reset-email delivery (needs credentials), dependency upgrades (drizzle-orm, next major versions).
 - Optional: signed-in first-login journey against a real dev database (auth currently only testable via mocked-session e2e specs on this machine).
 - Optional: e2e spec for the onboarding consent gate (unit-tested; browser-verified manually).
-- From the external audit (unchanged): A02 full deadline recovery, A04 sync idempotency, A05 publication lifecycle, A13 real reset-email delivery (needs credentials), dependency upgrades (drizzle-orm, next major versions).
+- Practice-hub modes beyond Quick/Medium/Full/Diagnostic (Spaced review, Mistake bank, etc.) are designed and queued in the hub; each unlocks as its data lands.
