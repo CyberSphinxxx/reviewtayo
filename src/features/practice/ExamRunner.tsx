@@ -30,6 +30,7 @@ import {
   EyeOff,
   Eye,
   Check,
+  CheckCircle2,
   Sliders,
 } from "lucide-react";
 
@@ -106,9 +107,27 @@ export function ExamRunner({
     createExamSession(initialQuestions, rules.timeLimitMinutes, rules.allowsFlagging)
   );
 
+  const currentQuestion = initialQuestions[session.currentIndex] || initialQuestions[0];
+  const currentAnswer = session.answers.get(currentQuestion?.id);
+
   // Testing UX & Accessibility States
   const [eliminatedChoices, setEliminatedChoices] = useState<Record<string, string[]>>({});
   const [practiceFeedbackMode] = useState<"instant" | "simulated">("instant");
+  /**
+   * Practice mode's two-step answer gate. Question ids already committed
+   * (locked in, feedback revealed). Selection alone does not count or reveal
+   * anything — the learner must press Answer.
+   */
+  const [committedAnswers, setCommittedAnswers] = useState<Set<string>>(new Set());
+  /** Whether the current practice question's answer has been committed. */
+  const currentQuestionCommitted = rules.mode === "practice" && committedAnswers.has(currentQuestion?.id ?? "");
+  /** A choice is selected but not yet committed on the current practice question. */
+  const hasUncommittedSelection =
+    rules.mode === "practice" &&
+    Boolean(currentAnswer?.selectedChoiceId) &&
+    !currentQuestionCommitted;
+  /** Last committed verdict on the current question, for the status line. */
+  const [verdict, setVerdict] = useState<"correct" | "incorrect" | null>(null);
   const [showScratchpad, setShowScratchpad] = useState(false);
   const [scratchpadNotes, setScratchpadNotes] = useState("");
   const [fontSize, setFontSize] = useState<"normal" | "large" | "xl">("normal");
@@ -212,8 +231,6 @@ export function ExamRunner({
   const sessionRef = useRef(session);
   sessionRef.current = session;
 
-  const currentQuestion = initialQuestions[session.currentIndex] || initialQuestions[0];
-  const currentAnswer = session.answers.get(currentQuestion?.id);
   const summary = getExamSessionSummary(session);
 
   // Question Map pagination: keep the map usable on 300-500 item banks.
@@ -434,6 +451,36 @@ export function ExamRunner({
     }
   }, [session.timer.isExpired, handleSubmit]);
 
+  // Reset the per-question commit view when navigating; the answer itself
+  // stays committed in committedAnswers (revisiting shows it as answered).
+  useEffect(() => {
+    setVerdict(null);
+  }, [session.currentIndex]);
+
+  /**
+   * Predictable position after navigation (WI-3): bring the active question
+   * heading just under the sticky bar when it is not fully in view, and move
+   * focus to it. Instant scroll under prefers-reduced-motion; skipped when
+   * the heading is already comfortably visible (no jarring scroll on mount).
+   */
+  useEffect(() => {
+    const heading = questionHeadingRef.current;
+    if (!heading) return;
+    const rect = heading.getBoundingClientRect();
+    const barHeight = 64; // sticky TestModeBar height
+    const fullyVisible = rect.top >= barHeight + 8 && rect.bottom <= window.innerHeight - 8;
+    if (!fullyVisible) {
+      const reduceMotion =
+        typeof window !== "undefined" &&
+        window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+      window.scrollTo({
+        top: window.scrollY + rect.top - barHeight - 12,
+        behavior: reduceMotion ? "auto" : "smooth",
+      });
+    }
+    heading.focus({ preventScroll: true });
+  }, [session.currentIndex]);
+
   // Choice elimination toggle handler
   const handleToggleEliminate = (choiceId: string, e?: React.MouseEvent) => {
     if (e) {
@@ -464,25 +511,18 @@ export function ExamRunner({
   useExamKeyboardShortcuts({
     onSelectChoice: (index) => {
       if (!currentQuestion?.choices[index]) return;
+      // Committed practice answers are locked — keyboard can't re-select.
+      if (rules.mode === "practice" && committedAnswers.has(currentQuestion.id)) return;
       const targetChoice = currentQuestion.choices[index];
       const isElim = (eliminatedChoices[currentQuestion.id] || []).includes(targetChoice.id);
       if (isElim) return;
 
       triggerHaptic(12);
       setSession((prev) => selectChoice(prev, currentQuestion.id, targetChoice.id));
-      applyCoachReaction(targetChoice.id);
     },
     onNext: () => {
       triggerHaptic(10);
-      if (session.currentIndex === session.totalQuestions - 1) {
-        if (usesReviewConfirmation) {
-          setShowReviewModal(true);
-        } else {
-          handleSubmit();
-        }
-      } else {
-        setSession((prev) => navigateNext(prev));
-      }
+      advanceAfterAnswer();
     },
     onPrev: () => {
       triggerHaptic(10);
@@ -557,11 +597,13 @@ export function ExamRunner({
     return h;
   }, [currentQuestion?.id]);
 
-  // After answering in practice mode, the owl itself delivers the verdict and
+  // After committing in practice mode, the owl delivers the verdict and
   // the full explanation in its bubble — no separate rationale card below.
+  // Before commit the owl stays neutral: the bubble must never preview the
+  // explanation (that would leak the answer the Answer button is guarding).
   const coachBubble = coachFeedback
     ? coachFeedback
-    : currentAnswer?.selectedChoiceId
+    : rules.mode === "practice" && currentQuestionCommitted
       ? {
           title: "Ulitin mo \u2019yan kapag nag-review.",
           body: currentQuestion?.explanation ?? "",
@@ -615,10 +657,53 @@ export function ExamRunner({
     [rules.mode, currentQuestion, coachSeed, fireConfetti]
   );
 
+  /**
+   * Practice mode: lock in the selected choice, reveal the verdict +
+   * explanation, and fire the coach reaction exactly once. The answer was
+   * already recorded on selection; committing only reveals it — it is never
+   * counted twice, and scoring reads the session once at submission.
+   */
+  const commitPracticeAnswer = useCallback(() => {
+    if (rules.mode !== "practice") return;
+    if (!currentQuestion) return;
+    if (committedAnswers.has(currentQuestion.id)) return;
+    const selectedId = sessionRef.current.answers.get(currentQuestion.id)?.selectedChoiceId;
+    if (!selectedId) return; // guarded by the disabled Answer button
+
+    const choice = currentQuestion.choices.find((c) => c.id === selectedId);
+    setCommittedAnswers((prev) => new Set(prev).add(currentQuestion.id));
+    setVerdict(choice?.isCorrect ? "correct" : "incorrect");
+    applyCoachReaction(selectedId);
+  }, [rules.mode, currentQuestion, committedAnswers, applyCoachReaction]);
+
+  /**
+   * The primary action's single behavior for button and keyboard: in practice
+   * mode, an uncommitted selection is answered first; a committed one moves
+   * on. Timed assessments navigate/submit directly (unchanged Next flow).
+   */
+  const advanceAfterAnswer = useCallback(() => {
+    if (rules.mode === "practice" && hasUncommittedSelection) {
+      commitPracticeAnswer();
+      return;
+    }
+    if (session.currentIndex === session.totalQuestions - 1) {
+      if (usesReviewConfirmation) {
+        setShowReviewModal(true);
+      } else {
+        handleSubmit();
+      }
+    } else {
+      setSession((prev) => navigateNext(prev));
+    }
+  }, [rules.mode, hasUncommittedSelection, commitPracticeAnswer, session.currentIndex, session.totalQuestions, usesReviewConfirmation, handleSubmit]);
+
   // Reset the bubble when navigating; the owl calms down shortly after reacting.
   useEffect(() => {
     setCoachFeedback(null);
   }, [session.currentIndex]);
+
+  /** Focus target for the active question heading (scroll/focus after Next). */
+  const questionHeadingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     if (!coachFeedback) return;
@@ -802,8 +887,8 @@ export function ExamRunner({
       )}
 
       {/* Main Exam Workspace */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 pb-24">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6 pb-20">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
           {/* Left rail (coach theme only) — owl on top, Question Map under it.
               Stacking them frees the whole right side for the question, which
               stretches wider, like the approved mockup. */}
@@ -843,7 +928,7 @@ export function ExamRunner({
           <div className="lg:col-span-8 space-y-6 order-2 lg:order-2">
             {currentQuestion && (
               <div
-                className={`relative rounded-3xl exam-card-shadow p-5 sm:p-7 md:p-8 transition-all ${
+                className={`relative rounded-3xl exam-card-shadow p-4 sm:p-6 lg:p-7 transition-all ${
                   highContrast ? "bg-white border-2 border-slate-900" : "bg-white border border-brand-100"
                 }`}
               >
@@ -857,7 +942,7 @@ export function ExamRunner({
                 )}
                 {/* Question Subtest & Utility Bar — rows stack so narrow
                     columns never force the tools to wrap into a mess */}
-                <div className="pb-4 border-b border-slate-100 space-y-2.5">
+                <div className="pb-3 border-b border-slate-100 space-y-2.5">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="px-2.5 py-1 rounded-md bg-brand-50 text-brand-700 font-bold text-xs tracking-wide">
                       {currentQuestion.subjectName}
@@ -1033,9 +1118,13 @@ export function ExamRunner({
                 </div>
 
                 {/* Progress Hierarchy */}
-                <div className="mt-4 space-y-2">
+                <div className="mt-3 space-y-2">
                   <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
-                    <h2 className="text-xl sm:text-2xl font-display font-extrabold text-[#1b1216] tracking-[-0.03em]">
+                    <h2
+                      ref={questionHeadingRef}
+                      tabIndex={-1}
+                      className="text-xl sm:text-2xl font-display font-extrabold text-[#1b1216] tracking-[-0.03em] outline-none focus-visible:outline-none"
+                    >
                       Question {session.currentIndex + 1} of {session.totalQuestions}
                     </h2>
                     <div className="text-xs font-medium text-[#6d5d63]">
@@ -1057,7 +1146,7 @@ export function ExamRunner({
 
                 {/* Question Text */}
                 <div
-                  className={`mt-4 font-medium leading-relaxed whitespace-pre-line ${questionFontSizeClass} ${
+                  className={`mt-3.5 font-medium leading-relaxed whitespace-pre-line ${questionFontSizeClass} ${
                     highContrast ? "text-black font-semibold" : "text-[#1b1216]"
                   }`}
                 >
@@ -1065,18 +1154,20 @@ export function ExamRunner({
                 </div>
 
                 {/* Choices (Clean rows, hover-revealed eliminate button) */}
-                <div className="mt-6 space-y-3">
+                <div className="mt-5 space-y-3">
                   {currentQuestion.choices.map((choice) => {
                     const isSelected = currentAnswer?.selectedChoiceId === choice.id;
                     const isEliminated = (eliminatedChoices[currentQuestion.id] || []).includes(choice.id);
 
-                    // Practice Instant Feedback calculation
+                    // Practice Instant Feedback calculation — colors and
+                    // verdicts only apply after the answer is committed.
                     const isPracticeInstant =
                       rules.mode === "practice" &&
                       practiceFeedbackMode === "instant" &&
-                      Boolean(currentAnswer?.selectedChoiceId);
+                      committedAnswers.has(currentQuestion.id);
                     const isCorrectChoice = choice.isCorrect;
                     const isSelectedAndWrong = isSelected && !isCorrectChoice;
+                    const isLockedAfterCommit = rules.mode === "practice" && committedAnswers.has(currentQuestion.id);
 
                     let choiceCardClasses = "border-[#efe3e5] hover:border-brand-300 bg-white hover:bg-[#fdf7f8]";
                     let choiceBadgeClasses = "bg-[#fbeff0] text-brand-700 group-hover:bg-[#f3d9df]";
@@ -1113,13 +1204,13 @@ export function ExamRunner({
                         <button
                           type="button"
                           data-testid={`choice-option-${choice.choiceLabel}`}
-                          disabled={isEliminated}
+                          disabled={isEliminated || isLockedAfterCommit}
                           onClick={() => {
-                            if (isEliminated) return;
+                            if (isEliminated || isLockedAfterCommit) return; // committed answers can't change
                             triggerHaptic(12);
                             setSession((prev) => selectChoice(prev, currentQuestion.id, choice.id));
-                            applyCoachReaction(choice.id);
                           }}
+                          aria-pressed={isSelected || undefined}
                           className="flex-1 flex items-start sm:items-center gap-3 sm:gap-4 text-left disabled:cursor-not-allowed"
                         >
                           <span
@@ -1171,7 +1262,7 @@ export function ExamRunner({
                 */}
 
                 {/* Bottom Navigation Controls */}
-                <div className="mt-8 flex items-center justify-between gap-4 pt-4 border-t border-[#f6e9ec]">
+                <div className="mt-5 flex items-center justify-between gap-4 pt-3.5 border-t border-[#f6e9ec]">
                   <button
                     type="button"
                     onClick={() => {
@@ -1186,34 +1277,81 @@ export function ExamRunner({
                     <span>Previous</span>
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      triggerHaptic(10);
-                      if (session.currentIndex === session.totalQuestions - 1) {
-                        if (usesReviewConfirmation) {
-                          setShowReviewModal(true);
-                        } else {
-                          handleSubmit();
-                        }
-                      } else {
-                        setSession((prev) => navigateNext(prev));
+                  {rules.mode === "practice" && !currentQuestionCommitted ? (
+                    /* Practice: the answer is locked in only through this
+                       action — selection alone reveals nothing. */
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerHaptic(12);
+                        commitPracticeAnswer();
+                      }}
+                      disabled={!hasUncommittedSelection || isSubmitting}
+                      aria-disabled={!hasUncommittedSelection}
+                      aria-describedby={
+                        !hasUncommittedSelection && !currentAnswer?.selectedChoiceId
+                          ? "practice-answer-hint"
+                          : undefined
                       }
-                    }}
-                    disabled={isSubmitting}
-                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-brand-700 hover:bg-brand-800 text-white font-bold text-sm shadow-[0_10px_24px_-10px_rgba(138,22,48,0.75)] transition active:scale-95 disabled:opacity-60"
-                    id="next-question-btn"
-                  >
-                    <span>
-                      {session.currentIndex === session.totalQuestions - 1
-                        ? usesReviewConfirmation
-                          ? "Review & Submit"
-                          : "Submit Test"
-                        : "Next"}
-                    </span>
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
+                      className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-brand-700 hover:bg-brand-800 text-white font-bold text-sm shadow-[0_10px_24px_-10px_rgba(138,22,48,0.75)] transition active:scale-95 disabled:opacity-50"
+                      id="next-question-btn"
+                    >
+                      <span>Answer</span>
+                      <Check className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerHaptic(10);
+                        advanceAfterAnswer();
+                      }}
+                      disabled={isSubmitting}
+                      className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-brand-700 hover:bg-brand-800 text-white font-bold text-sm shadow-[0_10px_24px_-10px_rgba(138,22,48,0.75)] transition active:scale-95 disabled:opacity-60"
+                      id="next-question-btn"
+                    >
+                      <span>
+                        {session.currentIndex === session.totalQuestions - 1
+                          ? usesReviewConfirmation
+                            ? "Review & Submit"
+                            : "Submit Test"
+                          : "Next"}
+                      </span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
+
+                {/* Practice commit gate hint + verdict — accessible text
+                    alongside the green/red choice styling. */}
+                {rules.mode === "practice" && !currentAnswer?.selectedChoiceId && (
+                  <p id="practice-answer-hint" className="mt-2 text-[13px] font-semibold text-[#8a7a80]">
+                    Select an answer to continue — the owl explains it after you commit.
+                  </p>
+                )}
+                {rules.mode === "practice" && verdict && (
+                  <p
+                    role="status"
+                    data-testid="practice-verdict"
+                    className={`mt-3 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-extrabold ${
+                      verdict === "correct"
+                        ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                        : "bg-rose-50 text-rose-800 border border-rose-200"
+                    }`}
+                  >
+                    {verdict === "correct" ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
+                        Correct. Nicely done.
+                      </>
+                    ) : (
+                      <>
+                        <AlertCircle className="w-4 h-4" aria-hidden="true" />
+                        Incorrect — the highlighted answer is correct.
+                      </>
+                    )}
+                  </p>
+                )}
               </div>
             )}
           </div>
