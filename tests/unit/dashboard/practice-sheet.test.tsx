@@ -6,6 +6,11 @@ import { StudyPlanView } from "@/features/dashboard/plan/StudyPlanView";
 import { WorkspaceService } from "@/lib/workspace/workspace-service";
 import { LocalStorageService } from "@/lib/storage";
 import { PreferencesService } from "@/lib/preferences";
+import {
+  resolveRunnerLevelSlug,
+  getPracticeModeHrefForLevel,
+  getPracticeMode,
+} from "@/config/practice-modes";
 
 vi.mock("@/lib/auth/auth-client", () => ({
   useSession: () => ({ data: null, isPending: false, refetch: vi.fn() }),
@@ -14,12 +19,14 @@ vi.mock("@/lib/auth/auth-client", () => ({
   signUp: { email: vi.fn() },
 }));
 
+const mockPush = vi.fn();
+
 vi.mock("next/navigation", async () => {
   const actual = await vi.importActual("next/navigation");
   return {
     ...actual,
     usePathname: () => "/dashboard/practice",
-    useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn(), back: vi.fn() }),
+    useRouter: () => ({ push: mockPush, replace: vi.fn(), prefetch: vi.fn(), back: vi.fn() }),
   };
 });
 
@@ -116,6 +123,99 @@ describe("practice setup sheet (P1)", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     // Focus restoration target is the opening card.
     expect(document.activeElement).toBe(card);
+  });
+});
+
+describe("practice hub runner URLs (Quick Drill 404 regression)", () => {
+  beforeEach(() => {
+    LocalStorageService.clearAllGuestData();
+    LocalStorageService.resetMigrationForTesting();
+    window.localStorage.clear();
+    PreferencesService.resetAllPreferences();
+    mockPush.mockClear();
+  });
+
+  it("maps workspace level ids to runner route slugs", () => {
+    expect(resolveRunnerLevelSlug("professional")).toBe("professional");
+    expect(resolveRunnerLevelSlug("subprofessional")).toBe("subprofessional");
+    expect(resolveRunnerLevelSlug("cse-professional")).toBe("professional");
+    expect(resolveRunnerLevelSlug("cse-subprofessional")).toBe("subprofessional");
+    expect(resolveRunnerLevelSlug("track-pro")).toBe("professional");
+    expect(resolveRunnerLevelSlug("track-subpro")).toBe("subprofessional");
+    expect(resolveRunnerLevelSlug(undefined)).toBe("professional");
+  });
+
+  it("substitutes the {level} template so enabled modes never 404", () => {
+    const quick = getPracticeMode("quick");
+    const medium = getPracticeMode("medium");
+    const full = getPracticeMode("full");
+    const diagnostic = getPracticeMode("diagnostic");
+
+    expect(getPracticeModeHrefForLevel(quick, "subprofessional")).toBe("/exams/subprofessional/quick");
+    expect(getPracticeModeHrefForLevel(medium, "cse-professional")).toBe("/exams/professional/medium");
+    expect(getPracticeModeHrefForLevel(full, "track-subpro")).toBe("/exams/subprofessional/full");
+    expect(getPracticeModeHrefForLevel(diagnostic, "professional")).toBe("/exams/professional/quick");
+    // Disabled / missing modes fall back to the practice hub.
+    expect(getPracticeModeHrefForLevel(undefined, "professional")).toBe("/practice");
+    expect(getPracticeModeHrefForLevel(getPracticeMode("flashcards"), "professional")).toBe("/practice");
+    // The raw catalog href must stay a template (call sites substitute it).
+    expect(quick!.href).toContain("{level}");
+  });
+
+  it("launches the quick drill exam mode at the active level with feedback=exam", async () => {
+    const { getByRole } = render(<PracticeHubView />);
+    // The catalog card opens the setup sheet.
+    fireEvent.click(getByRole("button", { name: /quick drill/i }));
+    const dialog = getByRole("dialog");
+    expect(dialog).toBeInTheDocument();
+    // Choose Exam mode, then Start — the push target must be a real runner URL.
+    fireEvent.click(getByRole("button", { name: /exam mode/i }));
+    fireEvent.click(getByRole("button", { name: /start quick drill/i }));
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    expect(mockPush).toHaveBeenCalledWith("/exams/professional/quick?feedback=exam");
+    expect(mockPush.mock.calls[0][0]).not.toContain("{level}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("launches study mode and the timer-off variant at the active level", () => {
+    render(<PracticeHubView />);
+    fireEvent.click(screen.getAllByRole("button", { name: /quick drill/i })[0]);
+    // Default: study feedback, timer on.
+    fireEvent.click(screen.getByRole("button", { name: /start quick drill/i }));
+    expect(mockPush).toHaveBeenCalledWith("/exams/professional/quick");
+
+    mockPush.mockClear();
+    fireEvent.click(screen.getAllByRole("button", { name: /quick drill/i })[0]);
+    fireEvent.click(screen.getByRole("switch", { name: /timer/i }));
+    fireEvent.click(screen.getByRole("button", { name: /start quick drill/i }));
+    expect(mockPush).toHaveBeenCalledWith("/exams/professional/quick?timer=off");
+  });
+
+  it("follows the active workspace level for subprofessional learners", () => {
+    LocalStorageService.clearAllGuestData();
+    WorkspaceService.createWorkspace({ examId: "cse", levelId: "subprofessional" });
+
+    render(<PracticeHubView />);
+    fireEvent.click(screen.getAllByRole("button", { name: /quick drill/i })[0]);
+    fireEvent.click(screen.getByRole("button", { name: /exam mode/i }));
+    fireEvent.click(screen.getByRole("button", { name: /start quick drill/i }));
+    expect(mockPush).toHaveBeenCalledWith("/exams/subprofessional/quick?feedback=exam");
+  });
+
+  it("direct-launch modes (full mock, diagnostic) push resolved runner URLs", () => {
+    render(<PracticeHubView />);
+    fireEvent.click(screen.getAllByRole("button", { name: /full mock exam/i })[0]);
+    expect(mockPush).toHaveBeenCalledWith("/exams/professional/full");
+    expect(mockPush.mock.calls[0][0]).not.toContain("{level}");
+
+    mockPush.mockClear();
+    // Diagnostic is a setup-sheet mode: the card opens the sheet, and its
+    // start CTA resolves to the quick runner (it shares the quick engine mode).
+    fireEvent.click(screen.getAllByRole("button", { name: /diagnostic test/i })[0]);
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /start diagnostic test/i }));
+    expect(mockPush).toHaveBeenCalledWith("/exams/professional/quick");
   });
 });
 
