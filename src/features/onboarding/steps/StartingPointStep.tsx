@@ -2,6 +2,7 @@
 
 import React from "react";
 import { ChoiceCard, ContinueButton } from "./ChoiceCard";
+import { DatePicker } from "@/components/ui/DatePicker";
 import type { UseOnboardingFlowResult } from "../useOnboardingFlow";
 import type { PrepStage } from "@/lib/onboarding/types";
 
@@ -53,14 +54,17 @@ export function StartingPointStep({ flow }: { flow: UseOnboardingFlowResult }) {
         >
           Exam date <span className="font-normal text-[#8a7a80] dark:text-[#c99aa6]">(optional)</span>
         </label>
-        <input
-          id="onboarding-target-date"
-          type="date"
-          value={answers.targetDate ?? ""}
-          min={new Date().toISOString().slice(0, 10)}
-          onChange={(e) => flow.patchAnswers({ targetDate: e.target.value || undefined })}
-          className="w-full max-w-xs rounded-xl border-2 border-[#f0dfe3] bg-white px-3.5 py-2.5 text-[14px] font-semibold text-[#1b1216] dark:border-white/15 dark:bg-transparent dark:text-[#f8ecee] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#86152d] dark:focus-visible:outline-[#ffd27a]"
-        />
+        {/* Styled calendar picker — same YYYY-MM-DD storage contract as the
+            previous native input, min = today so past dates stay disabled. */}
+        <div id="onboarding-target-date">
+          <DatePicker
+            ariaLabel="Exam date"
+            value={answers.targetDate ?? ""}
+            min={new Date().toISOString().slice(0, 10)}
+            onChange={(iso) => flow.patchAnswers({ targetDate: iso || undefined })}
+            placeholder="Pick your exam date"
+          />
+        </div>
         <p className="mt-1.5 text-[12.5px] text-[#8a7a80] dark:text-[#c99aa6]">
           Skip this if you&apos;re not sure — your plan works without a date.
         </p>
