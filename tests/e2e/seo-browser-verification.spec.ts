@@ -91,15 +91,15 @@ test.describe("SEO Public Routes & Mobile Readiness Verification", () => {
     },
     {
       path: "/faq",
-      expectedH1: "Civil Service Exam Frequently Asked Questions",
-      expectedTitle: "Frequently Asked Questions | ReviewTayo",
+      expectedH1: "Frequently Asked Questions",
+      expectedTitle: "Frequently Asked Questions on Exam Review & Preparation | ReviewTayo",
       canonical: "https://www.reviewtayo.online/faq",
       hasFaqSchema: true,
     },
     {
       path: "/about",
       expectedH1: "About ReviewTayo",
-      expectedTitle: "About Our Mission & Platform | ReviewTayo",
+      expectedTitle: "About ReviewTayo — Free Philippine Exam Reviewer | ReviewTayo",
       canonical: "https://www.reviewtayo.online/about",
     },
     {
