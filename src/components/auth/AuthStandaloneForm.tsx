@@ -429,7 +429,7 @@ export function AuthStandaloneForm({ initialState = "signin" }: { initialState?:
             Continue without an account
           </Link>
           <p className={`text-[13.5px] ${MUTED}`}>
-            New to CSE Reviewer?{" "}
+            New to ReviewTayo?{" "}
             <Link href="/create-account" className={`rounded font-bold text-brand-700 hover:underline dark:text-[#ff9fb5] ${FOCUS}`}>
               Create a free account
             </Link>
