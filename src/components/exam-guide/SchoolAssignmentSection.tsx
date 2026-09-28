@@ -77,7 +77,7 @@ export function SchoolAssignmentSection() {
         <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-4 text-xs text-slate-500 dark:text-slate-400 flex items-start gap-3">
           <ShieldCheck className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
           <p className="leading-relaxed">
-            <strong>Privacy & Security Guarantee:</strong> CSE Reviewer PH never collects, stores, or proxies your CSC credentials, application numbers, or date of birth. All school assignment checks occur exclusively on the official <code>erpo.csc.gov.ph</code> server.
+            <strong>Privacy & Security Guarantee:</strong> ReviewTayo never collects, stores, or proxies your CSC credentials, application numbers, or date of birth. All school assignment checks occur exclusively on the official <code>erpo.csc.gov.ph</code> server.
           </p>
         </div>
       </div>
