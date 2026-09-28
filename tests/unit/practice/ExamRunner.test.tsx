@@ -354,7 +354,7 @@ describe("ExamRunner Component", () => {
     expect(screen.getByText("Beta Choice").closest("div")).not.toHaveClass("border-brand-700");
   });
 
-  it("renders instant feedback and concept explanation in practice mode", () => {
+  it("requires committing the answer before revealing feedback in practice mode", () => {
     const practiceRules: ExamRuleConfig = {
       ...mockRules,
       mode: "practice",
@@ -368,13 +368,49 @@ describe("ExamRunner Component", () => {
       />
     );
 
-    // Select correct choice A
-    fireEvent.click(screen.getByText("Alpha Choice"));
+    // Before selecting: the primary action is Answer and disabled, with an
+    // accessible hint that a choice is needed.
+    const answerBtn = screen.getByRole("button", { name: "Answer" });
+    expect(answerBtn).toBeDisabled();
+    expect(screen.getByText(/Select an answer to continue/i)).toBeInTheDocument();
 
-    // The owl delivers the verdict; its bubble carries the full rationale —
-    // no separate card renders below the question in coach practice mode
+    // Selection alone reveals nothing.
+    fireEvent.click(screen.getByText("Alpha Choice"));
+    expect(screen.queryByText("Educational explanation for question 1")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("practice-verdict")).not.toBeInTheDocument();
+
+    // Committing locks the choice in, reveals the verdict + rationale, and
+    // swaps the primary action to Next.
+    fireEvent.click(screen.getByRole("button", { name: "Answer" }));
+    expect(screen.getByTestId("practice-verdict")).toHaveTextContent(/Correct/);
     expect(screen.getByText("Educational explanation for question 1")).toBeInTheDocument();
     expect(screen.queryByText(/Educational Concept & Rationale/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /next/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Answer" })).not.toBeInTheDocument();
+
+    // The committed choice is locked: clicking it again cannot change it.
+    fireEvent.click(screen.getByText("Beta Choice"));
+    expect(screen.getByTestId("practice-verdict")).toHaveTextContent(/Correct/);
+  });
+
+  it("shows the incorrect verdict with accessible text and the correct answer revealed", () => {
+    const practiceRules: ExamRuleConfig = { ...mockRules, mode: "practice" };
+
+    render(
+      <ExamRunner
+        initialQuestions={mockQuestions}
+        rules={practiceRules}
+        title="Topic Practice"
+      />
+    );
+
+    // q1: A is correct, B is wrong — commit the wrong answer.
+    fireEvent.click(screen.getByText("Beta Choice"));
+    fireEvent.click(screen.getByRole("button", { name: "Answer" }));
+
+    const verdict = screen.getByTestId("practice-verdict");
+    expect(verdict).toHaveTextContent(/Incorrect/);
+    expect(verdict).toHaveAttribute("role", "status");
   });
 
   it("opens and interacts with the virtual arithmetic scratchpad", () => {
@@ -403,7 +439,7 @@ describe("ExamRunner Component", () => {
     expect(screen.queryByText(/Scratchpad & Arithmetic Canvas/i)).not.toBeInTheDocument();
   });
 
-  it("shows the owl coach panel with streak reactions in practice mode", () => {
+  it("shows the owl coach panel with streak reactions after committed answers", () => {
     const practiceRules: ExamRuleConfig = { ...mockRules, mode: "practice" };
 
     render(
@@ -414,18 +450,23 @@ describe("ExamRunner Component", () => {
       />
     );
 
-    // Coach panel is present with the idle greeting bubble and no streak yet
+    // Coach panel is present; the empty streak chip is hidden (redundant copy)
     expect(screen.getByTestId("coach-panel")).toBeInTheDocument();
-    expect(screen.getByTestId("coach-streak")).toHaveTextContent("simulan natin");
+    expect(screen.queryByTestId("coach-streak")).not.toBeInTheDocument();
 
-    // Correct answer (A): owl goes happy, streak starts
+    // Selection alone does not fire the owl.
     fireEvent.click(screen.getByText("Alpha Choice"));
+    expect(screen.queryByTestId("coach-streak")).not.toBeInTheDocument();
+
+    // Committing the correct answer (A): owl goes happy, streak starts
+    fireEvent.click(screen.getByRole("button", { name: "Answer" }));
     expect(screen.getByTestId("coach-streak")).toHaveTextContent("Streak \u00D71");
 
-    // Next question, then a wrong answer (A is wrong on q2): streak resets
+    // Next question, then commit a wrong answer (A is wrong on q2): streak resets
     fireEvent.click(screen.getByRole("button", { name: /next/i }));
     fireEvent.click(screen.getByText("Gamma Choice"));
-    expect(screen.getByTestId("coach-streak")).toHaveTextContent("simulan natin");
+    fireEvent.click(screen.getByRole("button", { name: "Answer" }));
+    expect(screen.queryByTestId("coach-streak")).not.toBeInTheDocument();
 
     // The owl bubble carries the explanation instead of a separate card
     expect(screen.getByText("Educational explanation for question 2")).toBeInTheDocument();
@@ -445,7 +486,8 @@ describe("ExamRunner Component", () => {
     // and the owl never reacts because answers are hidden until submission.
     fireEvent.click(screen.getByText("Alpha Choice"));
     expect(screen.queryByText(/Educational Concept & Rationale/i)).not.toBeInTheDocument();
-    expect(screen.getByTestId("coach-streak")).toHaveTextContent("simulan natin");
+    // No streak chip while there is no streak (the neutral copy was redundant).
+    expect(screen.queryByTestId("coach-streak")).not.toBeInTheDocument();
     expect(screen.getByText("Selected")).toBeInTheDocument();
   });
 
@@ -467,13 +509,15 @@ describe("ExamRunner Component", () => {
       heading.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_PRECEDING
     ).toBeTruthy();
 
-    // Stats line counts answers and corrects as the player goes.
+    // Stats line counts answers and corrects as the player commits them.
     expect(screen.getByTestId("coach-progress")).toHaveTextContent("Answered 0/2 - Correct 0");
     fireEvent.click(screen.getByText("Alpha Choice"));
+    fireEvent.click(screen.getByRole("button", { name: "Answer" }));
     expect(screen.getByTestId("coach-progress")).toHaveTextContent("Answered 1/2 - Correct 1");
 
     fireEvent.click(screen.getByRole("button", { name: /next/i }));
     fireEvent.click(screen.getByText("Gamma Choice"));
+    fireEvent.click(screen.getByRole("button", { name: "Answer" }));
     expect(screen.getByTestId("coach-progress")).toHaveTextContent("Answered 2/2 - Correct 1");
 
     // The legacy placement (inside the right-hand map aside) is gone.
@@ -578,12 +622,16 @@ describe("ExamRunner Component", () => {
       />
     );
 
-    // Answer both questions, navigating with Next
+    // Answer both questions, navigating with Next after each commit
     fireEvent.click(screen.getByText("Alpha Choice"));
+    fireEvent.click(screen.getByRole("button", { name: "Answer" }));
     fireEvent.click(screen.getByRole("button", { name: /next/i }));
     fireEvent.click(screen.getByText("Delta Choice"));
 
-    // On the final question the CTA skips the review modal entirely
+    // On the final question, committing swaps Answer → Submit Test, which
+    // skips the review modal entirely
+    expect(screen.getByRole("button", { name: "Answer" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Answer" }));
     fireEvent.click(screen.getByRole("button", { name: /submit test/i }));
 
     await waitFor(() =>
@@ -606,8 +654,10 @@ describe("ExamRunner Component", () => {
     );
 
     fireEvent.click(screen.getByText("Alpha Choice"));
+    fireEvent.click(screen.getByRole("button", { name: "Answer" }));
     fireEvent.click(screen.getByRole("button", { name: /next/i }));
     fireEvent.click(screen.getByText("Delta Choice"));
+    fireEvent.click(screen.getByRole("button", { name: "Answer" }));
     fireEvent.click(screen.getByRole("button", { name: /submit test/i }));
 
     await waitFor(() =>
@@ -617,6 +667,58 @@ describe("ExamRunner Component", () => {
     const history = LocalStorageService.getAttemptHistory();
     expect(history.length).toBeGreaterThan(0);
     expect(history[0].examLevelId).toBe("subprofessional");
+  });
+
+  it("counts a committed practice answer exactly once in the recorded score", async () => {
+    const { LocalStorageService } = await import("@/lib/storage");
+    const practiceRules: ExamRuleConfig = { ...mockRules, mode: "practice" };
+
+    render(
+      <ExamRunner
+        initialQuestions={mockQuestions}
+        rules={practiceRules}
+        title="Topic Practice"
+        trackId="professional"
+      />
+    );
+
+    // Commit q1 (A is correct), then re-click the same choice — the answer
+    // must not be double-counted.
+    fireEvent.click(screen.getByText("Alpha Choice"));
+    fireEvent.click(screen.getByRole("button", { name: "Answer" }));
+    fireEvent.click(screen.getByText("Alpha Choice"));
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    fireEvent.click(screen.getByText("Delta Choice"));
+    fireEvent.click(screen.getByRole("button", { name: "Answer" }));
+    fireEvent.click(screen.getByRole("button", { name: /submit test/i }));
+
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith(expect.stringContaining("/results/"))
+    );
+
+    const history = LocalStorageService.getAttemptHistory();
+    expect(history.length).toBeGreaterThan(0);
+    // 2 questions committed correct once each: raw score 2, not 3 or 4.
+    expect(history[0].percentage).toBe(100);
+  });
+
+  it("keeps exam-mode navigation intact: no Answer gate, selection reveals nothing", () => {
+    render(
+      <ExamRunner
+        initialQuestions={mockQuestions}
+        rules={mockRules}
+        title="Diagnostic Quick Test"
+      />
+    );
+
+    // Timed assessments keep the plain Next flow.
+    expect(screen.getByRole("button", { name: /next/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Answer" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Alpha Choice"));
+    expect(screen.getByText("Selected")).toBeInTheDocument();
+    expect(screen.queryByTestId("practice-verdict")).not.toBeInTheDocument();
+    expect(screen.queryByText("Educational explanation for question 1")).not.toBeInTheDocument();
   });
 
   it("keeps the review confirmation for the full mock exam", () => {
