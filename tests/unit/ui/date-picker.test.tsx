@@ -96,6 +96,24 @@ describe("DatePicker", () => {
     expect(screen.getByRole("button", { name: /previous month/i })).toBeEnabled();
   });
 
+  it("navigates years with the header buttons and Shift+PageUp/PageDown", () => {
+    const onChange = vi.fn();
+    render(<DatePicker value="2027-03-14" onChange={onChange} min="2026-09-01" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /mar 14, 2027/i }));
+    expect(screen.getByText(/march 2027/i)).toBeInTheDocument();
+
+    // Year jump shares the month boundary state (March 2027 is reachable).
+    fireEvent.click(screen.getByRole("button", { name: /previous year/i }));
+    expect(screen.getByText(/march 2026/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /next year/i }));
+    expect(screen.getByText(/march 2027/i)).toBeInTheDocument();
+
+    // Shift+PageDown moves the focused day forward a year.
+    fireEvent.keyDown(screen.getByRole("grid"), { key: "PageDown", shiftKey: true });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   it("closes without selecting on Escape and returns focus to the trigger", async () => {
     const onChange = vi.fn();
     render(<DatePicker value="2026-09-15" onChange={onChange} />);
