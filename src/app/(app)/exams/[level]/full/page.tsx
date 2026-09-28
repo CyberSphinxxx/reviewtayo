@@ -1,8 +1,8 @@
-import { notFound } from "next/navigation";
 import { SEED_LEVELS } from "@/db/seed-data";
 import { getExamConfig } from "@/config/exams";
 import { prepareExamSession } from "@/features/practice/practice-service";
 import { ExamRunner } from "@/features/practice/ExamRunner";
+import { ExamLevelUnavailable } from "@/features/practice/ExamLevelUnavailable";
 
 // Per-request question selection — see exams/[level]/quick/page.tsx rationale.
 export const dynamic = "force-dynamic";
@@ -15,8 +15,9 @@ export default async function FullMockExamPage({
   const { level } = await params;
   const examLevel = SEED_LEVELS.find((l) => l.slug === level);
 
+  // Unknown level segment: a useful in-app state, not an unexplained 404.
   if (!examLevel) {
-    notFound();
+    return <ExamLevelUnavailable level={level} />;
   }
 
   // Item count and timer come from the catalog's level configuration — the
