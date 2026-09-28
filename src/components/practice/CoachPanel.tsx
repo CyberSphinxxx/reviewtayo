@@ -96,13 +96,15 @@ export function CoachPanel({
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-bold text-brand-700 leading-tight">{bubbleTitle}</p>
         </div>
-        <span
-          className={`shrink-0 inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-extrabold ${
-            hot ? "bg-gold-400 text-[#2a0a12]" : "bg-[#fbeff0] text-brand-700"
-          }`}
-        >
-          {streakLabel(streak, lastCorrect)}
-        </span>
+        {streak > 0 && (
+          <span
+            className={`shrink-0 inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-extrabold ${
+              hot ? "bg-gold-400 text-[#2a0a12]" : "bg-[#fbeff0] text-brand-700"
+            }`}
+          >
+            {streakLabel(streak, lastCorrect)}
+          </span>
+        )}
       </div>
     );
   }
@@ -113,7 +115,7 @@ export function CoachPanel({
       className="relative overflow-hidden rounded-3xl bg-white/80 border border-brand-100 shadow-[0_26px_50px_-30px_rgba(90,15,35,0.4)] text-center"
     >
       {/* ── Owl stage ─────────────────────────────────────────────── */}
-      <div className="relative px-6 pt-7 pb-5">
+      <div className="relative px-5 pt-4 pb-3">
         {/* Decorative dashed rings, echoing the landing hero */}
         <div
           aria-hidden="true"
@@ -123,44 +125,45 @@ export function CoachPanel({
           aria-hidden="true"
           className="pointer-events-none absolute -bottom-28 -right-20 h-52 w-52 rounded-full border-[1.5px] border-dashed border-brand-200/50"
         />
-        {/* Mood halo: the stage lights up with the owl's reaction */}
-        <div
+        {/* Mood halo: the stage lights up with the owl's reaction */}        <div
           aria-hidden="true"
-          className={`pointer-events-none absolute left-1/2 top-[54%] h-48 w-48 -translate-x-1/2 -translate-y-1/2 rounded-full transition-all duration-500 ${skin.halo}`}
+          className={`pointer-events-none absolute left-1/2 top-[54%] h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full transition-all duration-500 ${skin.halo}`}
         />
-        <div className="relative mx-auto w-[190px] max-w-full animate-owl-bob">
+        <div className="relative mx-auto w-[132px] max-w-full animate-owl-bob">
           <ReviewTayoOwl size="100%" withCap mood={mood} alt="ReviewTayo coach owl" />
         </div>
       </div>
 
-      {/* ── Speech bubble ─────────────────────────────────────────── */}
-      <div className="relative mx-4 mb-5">
+      {/* ── Speech bubble ─────────────────────────────────────────── */}      <div className="relative mx-3.5 mb-4">
         <div
-          className={`relative rounded-2xl border p-5 text-left transition-colors duration-300 ${skin.box}`}
+          className={`relative rounded-2xl border p-3.5 text-left transition-colors duration-300 ${skin.box}`}
         >
           <span
             aria-hidden="true"
             className={`absolute -top-[9px] left-1/2 ml-[-8px] h-4 w-4 rotate-45 border-l-[1.5px] border-t-[1.5px] ${skin.tail}`}
-          />
-          <p className={`text-[15px] font-bold leading-snug ${skin.title}`}>{bubbleTitle}</p>
+          />          <p className={`text-[14px] font-bold leading-snug ${skin.title}`}>{bubbleTitle}</p>
           {bubbleBody ? (
-            <p className="mt-2 text-[13.5px] leading-relaxed text-[#5a4a50]">{bubbleBody}</p>
+            <p className="mt-1.5 text-[13px] leading-relaxed text-[#5a4a50]">{bubbleBody}</p>
           ) : null}
         </div>
       </div>
 
       {/* ── Footer band: streak + session stats ───────────────────── */}
-      <div className="border-t border-[#f6e9ec] bg-[#fdf5f6]/70 px-5 py-4">
-        <span
-          data-testid="coach-streak"
-          className={`inline-flex items-center rounded-full px-4 py-2 text-[13px] font-extrabold transition-colors ${
-            hot
-              ? "bg-gold-400 text-[#2a0a12] shadow-[0_8px_20px_-8px_rgba(246,185,59,0.8)]"
-              : "bg-white text-[#6d5d63] shadow-[inset_0_0_0_1.5px_#f3d9df]"
-          }`}
-        >
-          {streakLabel(streak, lastCorrect)}
-        </span>
+      {/* No streak yet: the chip is redundant with the Answered/Correct
+          line below, so the band shows only that line (WI-9). */}
+      <div className="border-t border-[#f6e9ec] bg-[#fdf5f6]/70 px-5 py-3">
+        {streak > 0 && (
+          <span
+            data-testid="coach-streak"
+            className={`inline-flex items-center rounded-full px-4 py-2 text-[13px] font-extrabold transition-colors ${
+              hot
+                ? "bg-gold-400 text-[#2a0a12] shadow-[0_8px_20px_-8px_rgba(246,185,59,0.8)]"
+                : "bg-white text-[#6d5d63] shadow-[inset_0_0_0_1.5px_#f3d9df]"
+            }`}
+          >
+            {streakLabel(streak, lastCorrect)}
+          </span>
+        )}
         {typeof total === "number" && (
           <p
             data-testid="coach-progress"
