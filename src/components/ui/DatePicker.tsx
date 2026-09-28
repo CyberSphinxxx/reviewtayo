@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { formatManilaDate, getManilaTodayString, parseManilaDate } from "@/lib/study-plan";
 
 /**
@@ -13,8 +13,11 @@ import { formatManilaDate, getManilaTodayString, parseManilaDate } from "@/lib/s
  *   date math stays Asia/Manila-anchored (see @/lib/study-plan), so storage
  *   and timezone behavior are unchanged.
  * - Keyboard: Enter/Space open; arrows move days, Shift+arrows move weeks,
- *   PageUp/PageDown move months, Home/End jump within the week, Escape closes
- *   without selecting; focus returns to the trigger on close.
+ *   PageUp/PageDown move months, Shift+PageUp/PageDown move years, Home/End
+ *   jump within the week, Escape closes without selecting; focus returns to
+ *   the trigger on close.
+ * - Header: previous/next month + previous/next year buttons, all clamped to
+ *   `min`/`max`.
  * - `min`/`max` (YYYY-MM-DD) disable out-of-range days and clamp navigation.
  * - Popover is absolutely positioned within a relative wrapper so it also
  *   works inside dialogs (onboarding steps, settings forms).
@@ -179,27 +182,27 @@ export function DatePicker({
     switch (e.key) {
       case "ArrowRight":
         e.preventDefault();
-        moveFocused(1);
+        moveFocused(e.shiftKey ? 7 : 1);
         break;
       case "ArrowLeft":
         e.preventDefault();
-        moveFocused(-1);
+        moveFocused(e.shiftKey ? -7 : -1);
         break;
       case "ArrowDown":
         e.preventDefault();
-        moveFocused(7);
+        moveFocused(e.shiftKey ? 28 : 7);
         break;
       case "ArrowUp":
         e.preventDefault();
-        moveFocused(-7);
+        moveFocused(e.shiftKey ? -28 : -7);
         break;
       case "PageUp":
         e.preventDefault();
-        moveFocused(-30); // clamps to the previous month's visible day below
+        moveFocused(e.shiftKey ? -365 : -30); // 30d ≈ previous month, 365d ≈ previous year (clamped below)
         break;
       case "PageDown":
         e.preventDefault();
-        moveFocused(30);
+        moveFocused(e.shiftKey ? 365 : 30);
         break;
       case "Home": {
         e.preventDefault();
@@ -310,6 +313,9 @@ export function DatePicker({
     setFocusedDay((prev) => Math.min(prev ?? 1, dim));
   };
 
+  // Year navigation is a 12-month jump; the same clamping applies.
+  const shiftYear = (delta: number) => shiftMonth(delta * 12);
+
   return (
     <div ref={wrapperRef} className={`relative ${className}`}>
       <button
@@ -334,8 +340,19 @@ export function DatePicker({
           aria-label={ariaLabel}
           className="absolute z-40 mt-2 left-0 rounded-2xl border border-[#f3e6e9] dark:border-white/10 bg-white dark:bg-[#2b1620] p-4 shadow-[0_24px_48px_-24px_rgba(90,15,35,0.55)] w-[304px]"
         >
-          {/* Month navigation */}
+          {/* Month + year navigation. A year jump shares the month jump's
+              boundary state: the target month (y∓1, same m) is reachable iff
+              the adjacent month is, so the disabled flags are identical. */}
           <div className="flex items-center justify-between mb-3">
+            <button
+              type="button"
+              onClick={() => shiftYear(-1)}
+              disabled={!canGoPrev}
+              aria-label="Previous year"
+              className="w-9 h-9 grid place-items-center rounded-full bg-[#f4ecee] dark:bg-[#3a1f29] text-[#1b1216] dark:text-[#f8ecee] disabled:opacity-35 focus-visible:outline-2 focus-visible:outline-[#86152d] dark:focus-visible:outline-[#ffd27a]"
+            >
+              <ChevronsLeft className="w-4 h-4" aria-hidden="true" />
+            </button>
             <button
               type="button"
               onClick={() => shiftMonth(-1)}
@@ -356,6 +373,15 @@ export function DatePicker({
               className="w-9 h-9 grid place-items-center rounded-full bg-[#f4ecee] dark:bg-[#3a1f29] text-[#1b1216] dark:text-[#f8ecee] disabled:opacity-35 focus-visible:outline-2 focus-visible:outline-[#86152d] dark:focus-visible:outline-[#ffd27a]"
             >
               <ChevronRight className="w-4 h-4" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={() => shiftYear(1)}
+              disabled={!canGoNext}
+              aria-label="Next year"
+              className="w-9 h-9 grid place-items-center rounded-full bg-[#f4ecee] dark:bg-[#3a1f29] text-[#1b1216] dark:text-[#f8ecee] disabled:opacity-35 focus-visible:outline-2 focus-visible:outline-[#86152d] dark:focus-visible:outline-[#ffd27a]"
+            >
+              <ChevronsRight className="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
 
