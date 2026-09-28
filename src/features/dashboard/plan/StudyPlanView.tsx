@@ -19,6 +19,7 @@ import {
   parseManilaDate,
 } from "@/lib/study-plan";
 import { WorkspaceService } from "@/lib/workspace/workspace-service";
+import { DatePicker } from "@/components/ui/DatePicker";
 import {
   generateWeeklyPlan,
   weeklyPlanSignature,
@@ -441,21 +442,40 @@ export function StudyPlanView() {
             {formatManilaDate(studyStartDate, false)}
             {examDate ? ` → ${formatManilaDate(examDate, false)}` : " → no exam date set"}
           </span>
-          <label className="ml-auto inline-flex items-center gap-2 text-[12px] font-bold text-[#8a7a80] dark:text-[#a89ba1]">
-            <span className="sr-only">Change study start date</span>
-            <input
-              type="date"
+          <div className="ml-auto">
+            <span className="sr-only" id="study-start-label">Change study start date</span>
+            <DatePicker
               aria-label="Study start date"
+              aria-labelledby="study-start-label"
               value={studyStartDraft || studyStartDate}
               max={examDate || undefined}
-              onChange={(e) => {
-                setStudyStartDraft(e.target.value);
+              onChange={(iso) => {
+                // Preserve the draft-then-commit contract: picking a date
+                // stages it; the same validation rules apply before persist.
+                setStudyStartDraft(iso);
                 setStudyStartError(null);
+                // Commit immediately (the old control committed on blur;
+                // committing on explicit selection is more predictable and
+                // loses nothing — the value is fully validated either way).
+                const next = iso;
+                setStudyStartDraft("");
+                const parsed = parseManilaDate(next);
+                if (!parsed) {
+                  setStudyStartError("Enter a valid date.");
+                  return;
+                }
+                if (examDate && next > examDate) {
+                  setStudyStartError("Study start must be on or before the exam date.");
+                  return;
+                }
+                setStudyStartError(null);
+                if (next !== studyStartDate && currentWorkspace) {
+                  WorkspaceService.setStudyStartDate(next, currentWorkspace.id);
+                }
               }}
-              onBlur={commitStudyStart}
-              className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-[#2b1620] shadow-[inset_0_0_0_1.5px_rgba(138,22,48,0.18)] dark:shadow-[inset_0_0_0_1.5px_rgba(255,255,255,0.18)] text-[12.5px] font-bold text-[#1b1216] dark:text-[#f8ecee] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f6b93b]"
+              className="[&_button]:w-auto"
             />
-          </label>
+          </div>
           {studyStartError && (
             <p role="alert" className="w-full flex items-center gap-1.5 text-[12.5px] font-bold text-[#d1344b] dark:text-[#ff9fb5]">
               <AlertCircle className="w-4 h-4 shrink-0" aria-hidden="true" />
