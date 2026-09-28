@@ -77,7 +77,7 @@ no new personal-data collection.
   - Primary button: "Answer" (disabled until a choice is selected, with an accessible
     hint), → commit → reveal → becomes "Next" (last question: "Submit Test" after commit).
   - Commit: locks choices (non-interactive), fires coach reaction/confetti once, shows a
-    `role="status"` feedback line: "Correct." / "Not quite." + the explanation (clear text
+    `role="status"` feedback line: "Correct." / "Incorrect" + the explanation (clear text
     + green/red styling), owl bubble shows the quip title.
   - Answer is never counted twice: selection after commit is ignored; scoring reads
     answers once at submit.
@@ -135,8 +135,9 @@ no new personal-data collection.
 ### 8. Date picker
 - New `src/components/ui/DatePicker.tsx` (client): styled trigger, popover grid, ISO
   string value (timezone-safe: `getManilaTodayString` + UTC math like StudyPlanView),
-  `min`/`max` disabled dates, month + year navigation, full keyboard support
-  (arrows/Home/End/PageUp/PageDown/Escape), focus management (focus selected day on open,
+  `min`/`max` disabled dates, month + year navigation buttons, full keyboard support
+  (arrows, Shift+arrows weeks, PageUp/PageDown months, Shift+PageUp/PageDown years,
+  Home/End/Escape), focus management (focus selected day on open,
   return focus to trigger on close), ≥40px touch targets, Tailwind brand tokens.
 - Replace the native inputs in StudyPlanView (study period), onboarding StartingPointStep
   (exam date), and Settings→Study (custom target date). MyExamsDialog/ExamCalendarCard
