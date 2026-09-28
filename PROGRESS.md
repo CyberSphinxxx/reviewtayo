@@ -15,10 +15,10 @@ The nine work items from the QA mission, each with its root cause, fix, tests, a
 - **WI-3 Runner spacing/reflow** — ExamRunner card padding, choice list, and nav spacing tightened; CoachPanel owl stage 190→132px, tighter paddings; question heading gets a ref + focus after navigation (skips when fully visible, respects reduced-motion). Pinned by ExamRunner unit tests; fit verified live at 1280×800, 1440×900, 390×844 (no horizontal scroll).
 - **WI-4 Dashboard flicker** — DashboardView greeted with a mounted-flip ("Good evening" → "Welcome back") and computed longestStreak during render. Now a stable "Welcome back", `longestStreak` measured in an effect, sectionIntro() replaces negative-margin overlap, tabular-nums on KPI numbers. Tests: `tests/unit/dashboard/` (58 across the suite).
 - **WI-5 About page + branding** — `/about` rewritten (why/who/how, what's live CSE-only, planned-not-live list, multi-exam framing, non-affiliation note); "CSE Reviewer PH" → "ReviewTayo" in csc-domain disclaimers, exam-guide sections, AuthForm/AuthStandaloneForm. Pinned by content tests + updated SEO e2e pins.
-- **WI-6 FAQ** — FAQ types extended with general categories (`FAQ_GENERAL_CATEGORIES`), 11 honest general entries, /faq rebuilt (general first, per-exam groups CSE-first, CSC-verified badge on exam-only categories, accessible accordion h3>button aria-expanded/aria-controls + role=region, "Other exams" placeholder without fabricated Q&A, search across both). Tests: `tests/unit/content/faq-structure.test.ts` (14).
+- **WI-6 FAQ** — FAQ types extended with general categories (`FAQ_GENERAL_CATEGORIES`), 11 honest general entries, /faq rebuilt (general first, per-exam groups CSE-first, CSC-verified badge on exam-only categories, accessible accordion h3>button aria-expanded/aria-controls + role=region, "Other exams" placeholder without fabricated Q&A, search across both). Tests: `tests/unit/content/faq-structure.test.ts` (5).
 - **WI-7 Dashboard chrome/fonts** — AppShell skeleton target-card rule fixed (gated test now passes), streak/daily-goal "—" until measured (no effect→render flicker); Google Fonts CSS @import removed from globals.css, next/font (Bricolage Grotesque 500/800, Figtree 400–800) in layout.tsx, vestigial fonts.googleapis preconnects removed — zero Google-Fonts network dependency. Tests: dashboard + gated regression tests.
 - **WI-8 DatePicker** — study-period, onboarding exam-date, and custom-target-date native `<input type=date>` replaced with a new `src/components/ui/DatePicker.tsx` (grid popover, min/max clamping, full keyboard map, focus return, aria grid semantics, YYYY-MM-DD contract). Fixed two real bugs found by its tests: civil-date parsing (parseManilaDate midnight ≠ UTC day) and mixed timestamp-space month-boundary compares. Tests: `tests/unit/ui/date-picker.test.tsx` (8).
-- **WI-9 Streak chip** — CoachPanel hides the streak chip at streak 0 (panel + compact), shows "Streak ×N" from the first correct answer. Pinned by CoachPanel unit tests.
+- **WI-9 Streak chip** — CoachPanel hides the streak chip at streak 0 (panel + compact), shows "Streak ×N" from the first correct answer. Pinned by ExamRunner unit tests (`coach-streak` assertions across streak states).
 
 **Browser evidence (production build, port 3457, Chromium)**
 
@@ -34,8 +34,20 @@ The nine work items from the QA mission, each with its root cause, fix, tests, a
 
 - `npm run verify`: **exit 0** — typecheck clean, ESLint clean, architecture guard PASS, Vitest **86 files / 608 tests**, production build clean.
 - `PORT=3457 npm run test:e2e`: **91 passed / 2 skipped (pre-existing deprecated visual suite) / 0 failed** against the production build.
-- Test additions this round: practice-hub e2e (7), practice answer-gate e2e, faq-structure (14), date-picker (8), updated ExamRunner/SEO pins; `tests/setup.ts` mocks next/font.
+- Test additions this round: practice-hub e2e (7), practice answer-gate e2e, faq-structure (5), date-picker (9), updated ExamRunner/SEO pins; `tests/setup.ts` mocks next/font.
 - Fixed during verification: my new e2e specs initially assumed an onboarded profile (hub locked for fresh contexts) — seeded completed CSE-professional onboarding like the existing onboarding spec; SEO spec's /about + /faq title/H1 pins updated to the intentionally rewritten pages (schema/canonical assertions untouched, still pass).
+
+## Post-completion audit (same round)
+
+An independent audit pass re-checked every acceptance criterion against the committed code (not the walkthrough) and every documented claim. Findings, all fixed and re-gated:
+
+- **DatePicker missing promised features** — the plan promised year navigation and the component doc-comment promised Shift+arrow week moves, but neither shipped. Restored: previous/next-year header buttons (ChevronsLeft/Right, same min/max boundary state as month buttons), Shift+arrows ±7d, Shift+ArrowUp/Down ±28d, Shift+PageUp/Down ±365d. New test pins year-button navigation (`date-picker.test.tsx`, now 9 tests).
+- **Missing `aria-busy`** — the plan's WI-4 item promised `aria-busy` while the workspace loads; DashboardView never rendered it. Added `aria-busy={!isLoaded || undefined}` to the dashboard root.
+- **Stale CSP font sources** — `next.config.ts` still allowed `fonts.googleapis.com`/`fonts.gstatic.com` after the next/font migration. Tightened `style-src`/`font-src`.
+- **Doc claims corrected** (no code impact): faq-structure test count is 5, not 14; WI-9 is pinned by ExamRunner tests (no standalone CoachPanel test file); verdict string is "Incorrect — the highlighted answer is correct.", not "Not quite." (implementation_plan wording fixed).
+- Verified non-issues: `resolveRunnerLevelSlug` covers all documented id shapes (tests pin `cse-*`, `track-*`, `cse-subprofessional`, undefined); FAQ JSON-LD covers rendered questions (FAQPage schema present); exam-mode no-reveal coverage exists in ExamRunner tests.
+
+Re-verification after fixes: `npm run verify` exit 0 (86 files / 609 tests), `PORT=3457 npm run test:e2e` 91 passed / 2 skipped / 0 failed.
 
 ## Project audit round (prior)
 
