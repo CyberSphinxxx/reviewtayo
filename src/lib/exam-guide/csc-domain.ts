@@ -78,7 +78,7 @@ export function getSafeExternalLinkProps(url: string) {
 }
 
 export const CSC_LOGIN_SECURITY_DISCLAIMER =
-  "You are leaving CSE Reviewer PH and opening an official CSC website. Enter your CSC credentials only on a verified csc.gov.ph domain.";
+  "You are leaving ReviewTayo and opening an official CSC website. Enter your CSC credentials only on a verified csc.gov.ph domain.";
 
 export const CSE_REVIEWER_INDEPENDENCE_DISCLAIMER =
-  "CSE Reviewer PH is an independent exam-preparation platform. It is not affiliated with or endorsed by the Civil Service Commission. Examination schedules, locations, requirements, and application procedures may change. Always confirm current details through the linked official CSC announcement or regional office.";
+  "ReviewTayo is an independent exam-preparation platform. It is not affiliated with or endorsed by the Civil Service Commission. Examination schedules, locations, requirements, and application procedures may change. Always confirm current details through the linked official CSC announcement or regional office.";
