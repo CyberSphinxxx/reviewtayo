@@ -1,6 +1,112 @@
 import type { FAQItem } from "./types";
 
+/**
+ * General ReviewTayo questions first (platform-level; no examIds), followed by
+ * exam-specific entries (CSE today; entries tagged with other exam ids join
+ * automatically when those exams launch). Every answer below describes
+ * implemented behavior — no invented prices, guarantees, or release dates.
+ */
+const GENERAL_FAQS: FAQItem[] = [
+  {
+    id: "what-is-reviewtayo",
+    category: "The website",
+    question: "What is ReviewTayo?",
+    answer:
+      "ReviewTayo is a free, independent online reviewer for Philippine government examinations. It gives you realistic timed practice, original questions with detailed explanations, and progress tracking that shows exactly which subjects need work. The Civil Service Exam (CSE) is the first supported exam, and the platform is designed to add more Philippine exams over time.",
+    relatedLinks: [
+      { text: "About ReviewTayo", href: "/about" },
+      { text: "Browse exams", href: "/reviewers" },
+    ],
+  },
+  {
+    id: "is-reviewtayo-free",
+    category: "The website",
+    question: "Is ReviewTayo free to use?",
+    answer:
+      "Yes. Every practice mode — quick drills, medium assessments, topic practice, and full mock exams — is free, and the core practice features work without an account. Some informational pages display advertising, which keeps the platform free; exams and practice screens themselves stay ad-free.",
+  },  {
+    id: "is-reviewtayo-official",
+    category: "The website",
+    question: "Is ReviewTayo affiliated with the Civil Service Commission?",
+    answer:
+      "No. ReviewTayo is an independent educational platform and is not affiliated with, endorsed by, or authorized by the Civil Service Commission (CSC) or any government agency. Official schedules, requirements, and results only come from official CSC channels — our exam guide links to those official sources where relevant, and study content is our own.",
+    relatedLinks: [{ text: "CSE exam guide", href: "/cse/exam-guide" }],
+  },
+  {
+    id: "getting-started-first-step",
+    category: "Getting started",
+    question: "I'm new — where should I start?",
+    answer:
+      "Take a 10-question quick drill first. It mixes all subjects, takes about 10 minutes, and gives you a per-subject breakdown so you know where you stand. From there, your dashboard recommends what to practice next, and you can set up a study plan built around your exam date and daily goal.",
+    relatedLinks: [
+      { text: "Take the quick drill", href: "/exams/professional/quick" },
+      { text: "Set up a study plan", href: "/onboarding" },
+    ],
+  },
+  {
+    id: "choose-level",
+    category: "Getting started",
+    question: "How do I choose between Professional and Subprofessional?",
+    answer:
+      "Both are levels of the Career Service Exam. Professional eligibility qualifies you for second-level (technical/professional) positions and includes Analytical Ability; Subprofessional eligibility qualifies you for first-level (clerical/trades) positions and includes Clerical Ability instead. You can switch levels anytime — your dashboard, practice routes, and plans follow your active choice.",
+    relatedLinks: [{ text: "Professional vs Subprofessional comparison", href: "/articles/professional-vs-subprofessional-difference" }],
+  },
+  {
+    id: "practice-vs-exam-mode",
+    category: "Practice vs exam mode",
+    question: "What's the difference between practice mode and exam mode?",
+    answer:
+      "Practice (topic) mode teaches as you go: you pick an answer, press the Answer button to lock it in, and see immediately whether it was correct, along with a full explanation. Exam modes (quick, medium, and full mock) are graded assessments: answers stay hidden until you submit, so your score reflects real exam conditions. The dashboard practice hub lets you choose the feedback style for quick and medium sessions.",
+    relatedLinks: [
+      { text: "Open the practice hub", href: "/dashboard/practice" },
+      { text: "Topic practice directory", href: "/practice" },
+    ],
+  },
+  {
+    id: "timer-behavior",
+    category: "Practice vs exam mode",
+    question: "How do the timers work?",
+    answer:
+      "Quick and medium tests run short session timers (10 and 30 minutes). Full mock exams use one single continuous countdown for the whole paper — 3 hours 10 minutes for Professional, 2 hours 40 minutes for Subprofessional — matching the real exam's single overall time allotment rather than per-section timers. Your session auto-submits when time runs out, and an unfinished session can be saved and resumed later.",
+  },
+  {
+    id: "where-are-results",
+    category: "Progress & results",
+    question: "Where can I see my past results and progress?",
+    answer:
+      "Every completed session lands on your dashboard: recent sessions with scores, full history, per-subject accuracy against your target, an activity calendar, and a mistake bank that schedules previously missed questions for spaced review. Results pages also break down every question with the correct answer and explanation.",
+    relatedLinks: [
+      { text: "Open your dashboard", href: "/dashboard" },
+      { text: "Session history", href: "/dashboard/history" },
+    ],
+  },
+  {
+    id: "progress-stored-where",
+    category: "Progress & results",
+    question: "Is my progress saved if I close the browser?",
+    answer:
+      "Yes — for guests, progress is saved on your device (browser storage), so returning to the same browser picks up where you left off, including unfinished sessions. Progress doesn't follow you to another browser or device until you sign in, which lets you sync your local progress to your account.",
+    relatedLinks: [{ text: "Data & privacy settings", href: "/settings/data" }],
+  },
+  {
+    id: "account-required",
+    category: "Accounts & privacy",
+    question: "Do I need an account to practice?",
+    answer:
+      "No. You can practice immediately as a guest — no sign-up, no email. Creating a free account is optional and only adds cross-device sync of your progress. You can also export all of your data or delete your account (and every record tied to it) at any time from Settings.",
+    relatedLinks: [{ text: "Privacy policy (RA 10173)", href: "/privacy" }],
+  },
+  {
+    id: "report-question-issue",
+    category: "Help & feedback",
+    question: "I think a question has an error — how do I report it?",
+    answer:
+      "Every question in a session has a Report button (in the question's toolbar). It opens a short form where you pick the issue type — wrong answer, wrong explanation, typo, ambiguous question, or outdated information — and describe what you saw. Reports go straight to the content team for review.",
+  },
+];
+
 export const FAQS: FAQItem[] = [
+  ...GENERAL_FAQS,
   {
     id: "eligibility-qualifications",
     category: "Qualifications & Eligibility",
