@@ -130,6 +130,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [target, setTarget] = useState<TargetExamSummary | null>(null);
   const [dailyDone, setDailyDone] = useState(0);
   const [dueCount, setDueCount] = useState(0);
+  /** Client-only streak read: null until measured (fixes the hydration swap). */
+  const [streak, setStreak] = useState<number | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
@@ -138,6 +140,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setTarget(getTargetExamSummary());
     setDailyDone(LocalStorageService.getDailyQuestionsAnswered());
     setDueCount(LocalStorageService.getDueMistakes().length);
+    setStreak(LocalStorageService.getStudyStreak().currentStreak);
   }, []);
 
   // The storage migration can provision a workspace for legacy profiles AFTER
@@ -191,6 +194,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const goal = target?.dailyGoal ?? preferences.study.dailyGoal;
   const goalPct = goal > 0 ? Math.min(100, Math.round((dailyDone / goal) * 100)) : 0;
   const showNewPills = mounted;
+  // The target card, goal bar, and streak chip are all measured in an effect.
+  // Until the first measurement lands, render fixed-height placeholders —
+  // never the opposite branch — so the top-left chrome cannot visibly swap
+  // right after load (the reported exam-target flicker). The placeholder
+  // only covers the UNKNOWN window: once the shell knows there is no
+  // workspace, the real "Choose your exam" card renders immediately.
+  const targetPending = !target && !(isLoaded && !hasExam);
+  const countsPending = streak === null;
 
   const navButton = (item: ShellNavItem) => {
     const Icon = item.icon;
@@ -260,7 +271,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </Link>
 
       {/* Target exam quick card */}
-      {target ? (
+      {targetPending ? (
+        <div
+          aria-hidden="true"
+          className="block w-full rounded-2xl bg-white dark:bg-white/[0.07] p-3.5 shadow-[inset_0_0_0_1px_rgba(138,22,48,0.10)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12)]"
+        >
+          <span className="block h-3 w-20 rounded bg-[#f0e2e5] dark:bg-white/10" />
+          <span className="block mt-2 h-5 w-36 rounded bg-[#f0e2e5] dark:bg-white/10" />
+          <span className="block mt-2 h-3.5 w-28 rounded bg-[#f0e2e5] dark:bg-white/10" />
+        </div>
+      ) : target ? (
         <Link
           href="/settings/study"
           className="block w-full text-left bg-white dark:bg-white/[0.07] rounded-2xl p-3.5 shadow-[inset_0_0_0_1px_rgba(138,22,48,0.10)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12)] hover:bg-[#fbeff0] dark:hover:bg-white/[0.12] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f6b93b]"
@@ -306,8 +326,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="bg-white dark:bg-white/[0.07] rounded-2xl p-3 shadow-[inset_0_0_0_1px_rgba(138,22,48,0.10)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12)]">
           <div className="flex justify-between text-[13px] font-bold text-[#8a7a80] dark:text-[#ecd2d8]">
             <span>Daily goal</span>
+            {/* Placeholder "—/goal" until the first measurement so the bar
+                never renders 0% for a beat and then jumps. */}
             <b className="text-[#1b1216] dark:text-white tabular-nums">
-              {dailyDone}/{goal}
+              {countsPending ? "—" : dailyDone}/{goal}
             </b>
           </div>
           <div className="h-2 rounded-full bg-[#f4e7e9] dark:bg-white/[0.14] mt-2 overflow-hidden">
@@ -456,11 +478,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <ReviewTayoOwl size={26} withCap aria-hidden="true" />
             <span>reviewtayo</span>
           </Link>
+          {/* Streak is measured in an effect, so SSR and the first client
+              render agree — no visible swap after hydration. */}
           <span className="inline-flex items-center gap-1.5 rounded-full bg-[#fdeec6] text-[#6b4300] px-3 py-1.5 text-[13px] font-extrabold">
             <Zap className="w-3.5 h-3.5" aria-hidden="true" />
-            {LocalStorageService.formatDayStreak(
-              LocalStorageService.getStudyStreak().currentStreak
-            )}
+            {streak !== null ? LocalStorageService.formatDayStreak(streak) : "—"}
           </span>
         </header>
 
