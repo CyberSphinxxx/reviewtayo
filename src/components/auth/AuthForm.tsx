@@ -374,7 +374,7 @@ export function AuthForm({
         )}
         {state === "signin" && (
           <p className={`text-[13.5px] ${MUTED}`}>
-            New to CSE Reviewer?{" "}
+            New to ReviewTayo?{" "}
             <button
               type="button"
               onClick={() => handleModeChange("create-account")}
