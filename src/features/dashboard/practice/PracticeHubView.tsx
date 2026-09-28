@@ -28,6 +28,7 @@ import {
   PRACTICE_MODES,
   PRACTICE_MODE_GROUPS,
   getPracticeMode,
+  getPracticeModeHrefForLevel,
   type PracticeModeDef,
 } from "@/config/practice-modes";
 import { LocalStorageService, type SubjectReadinessMetric } from "@/lib/storage";
@@ -182,7 +183,10 @@ export function PracticeHubView() {
 
   const resolveHref = useCallback(
     (mode: PracticeModeDef, state: { subject: string; feedback: "study" | "exam"; timer: boolean }): string => {
-      const base = mode.href ?? "/practice";
+      // The catalog href is a {level} template; substitute the ACTIVE level's
+      // slug before appending params. Embedding the raw template 404s on
+      // /exams/{level}/quick (the reported Quick Drill bug).
+      const base = getPracticeModeHrefForLevel(mode, currentWorkspace?.levelId);
       const params = new URLSearchParams();
       if (state.subject && state.subject !== "All subjects") params.set("subject", state.subject);
       if (state.feedback === "exam") params.set("feedback", "exam");
@@ -190,13 +194,15 @@ export function PracticeHubView() {
       const qs = params.toString();
       return qs ? `${base}?${qs}` : base;
     },
-    []
+    [currentWorkspace?.levelId]
   );
 
   const openSetup = (mode: PracticeModeDef) => {
     if (!mode.enabled) return;
     if (!SETUP_ENABLED.has(mode.id)) {
-      router.push(mode.href ?? "/practice");
+      // Direct-launch modes (full mock, diagnostic) also carry {level}
+      // templates in their href — resolve them the same way.
+      router.push(getPracticeModeHrefForLevel(mode, currentWorkspace?.levelId));
       return;
     }
     setSetup({ mode, subject: "All subjects", feedback: "study", timer: true });
