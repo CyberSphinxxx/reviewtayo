@@ -61,17 +61,37 @@ export interface Article {
   examIds?: ContentExamId[];
 }
 
+/**
+ * FAQ categories split into two audience levels: general categories apply to
+ * the ReviewTayo platform itself, while exam-specific categories describe a
+ * particular examination. The category is the discriminator (see
+ * FAQ_GENERAL_CATEGORIES): general entries never appear under an exam group.
+ */
+export const FAQ_GENERAL_CATEGORIES = [
+  "The website",
+  "Getting started",
+  "Practice vs exam mode",
+  "Progress & results",
+  "Accounts & privacy",
+  "Help & feedback",
+] as const;
+
+export type FaqGeneralCategory = (typeof FAQ_GENERAL_CATEGORIES)[number];
+
+export type FaqExamCategory =
+  | "Qualifications & Eligibility"
+  | "Exam Format & Scoring"
+  | "Exam Day Guidelines"
+  | "Preparation & Review";
+
 export interface FAQItem {
   id: string;
-  category:
-    | "Qualifications & Eligibility"
-    | "Exam Format & Scoring"
-    | "Exam Day Guidelines"
-    | "Preparation & Review";
+  category: FaqGeneralCategory | FaqExamCategory;
   question: string;
   answer: string;
   relatedLinks?: Array<{ text: string; href: string }>;
   /** Exams this FAQ entry serves. Optional for backward compatibility; an
-   * entry without examIds is a legacy CSE entry. */
+   * entry without examIds is a legacy CSE entry. Adding a new exam means
+   * appending entries tagged with its id — no page changes needed. */
   examIds?: ContentExamId[];
 }
