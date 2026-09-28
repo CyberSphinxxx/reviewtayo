@@ -275,7 +275,7 @@ export function DashboardView() {
   const greeting = "Welcome back";
 
   return (
-    <div className="animate-page-enter space-y-5">
+    <div className="animate-page-enter space-y-5" aria-busy={!isLoaded || undefined}>
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div>
