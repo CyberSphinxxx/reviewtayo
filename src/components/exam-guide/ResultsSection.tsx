@@ -30,7 +30,7 @@ export function ResultsSection() {
       <div className="rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50/80 dark:bg-blue-950/30 p-4 text-xs text-blue-950 dark:text-blue-200 flex items-start gap-3">
         <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
         <p className="leading-relaxed">
-          <strong>Official Results Policy:</strong> Only results published through verified CSC channels (<code>csc.gov.ph</code>) are official and legally recognized. CSE Reviewer PH does not host, reproduce, or query passer databases to protect applicant privacy.
+          <strong>Official Results Policy:</strong> Only results published through verified CSC channels (<code>csc.gov.ph</code>) are official and legally recognized. ReviewTayo does not host, reproduce, or query passer databases to protect applicant privacy.
         </p>
       </div>
 
