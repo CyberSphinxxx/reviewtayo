@@ -205,6 +205,32 @@ export function resolvePracticeModeHref(
   return href.replace(/\{level\}/g, level);
 }
 
+/**
+ * Maps a workspace `levelId` to the runner route's level slug.
+ *
+ * Workspace level ids come in three shapes: plain slugs ("professional"),
+ * exam-prefixed ids ("cse-professional" from Preferences), and legacy
+ * "track-*" ids from pre-migration workspaces. Runner routes are addressed
+ * by plain slug (/exams/[level]/...), so every call site that builds a runner
+ * URL must go through this mapping instead of embedding the raw level id.
+ */
+export function resolveRunnerLevelSlug(levelId: string | undefined | null): string {
+  const raw = (levelId || "").toLowerCase();
+  if (raw.endsWith("subprofessional") || raw.endsWith("track-subpro")) return "subprofessional";
+  if (raw.endsWith("professional") || raw.endsWith("track-pro")) return "professional";
+  return "professional";
+}
+
+/**
+ * Resolves a practice mode's route for a workspace level id, substituting the
+ * `{level}` template segment. Returns the practice hub when the mode has no
+ * route (or is disabled) — never a literal `{level}` URL, which 404s.
+ */
+export function getPracticeModeHrefForLevel(mode: PracticeModeDef | undefined, levelId: string | undefined | null): string {
+  if (!mode || !mode.enabled) return "/practice";
+  return getPracticeModeHref(mode, resolveRunnerLevelSlug(levelId));
+}
+
 /** Resolves a mode's href for the given level. */
 export function getPracticeModeHref(mode: PracticeModeDef, level: string): string {
   return resolvePracticeModeHref(mode.href, level);
