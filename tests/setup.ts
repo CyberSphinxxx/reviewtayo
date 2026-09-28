@@ -1,6 +1,14 @@
 import "@testing-library/jest-dom";
 import { vi } from "vitest";
 
+// next/font/google is a build-time transform, not a runtime module: mock it so
+// suites that import layout metadata don't crash in Vitest. The shape mirrors
+// what the real factory returns (className + variables).
+vi.mock("next/font/google", () => ({
+  Bricolage_Grotesque: () => ({ className: "mock-font-display", variable: "--font-display" }),
+  Figtree: () => ({ className: "mock-font-body", variable: "--font-body" }),
+}));
+
 if (typeof HTMLCanvasElement !== "undefined") {
   HTMLCanvasElement.prototype.getContext = (() => ({
     fillRect: () => {},
